@@ -40,5 +40,6 @@ export function toProjectView(
       summary,
       currentPlanSummary,
     ].filter(Boolean),
+    lastConversationAt: null,
   };
 }

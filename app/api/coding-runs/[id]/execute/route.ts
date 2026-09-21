@@ -13,6 +13,7 @@ import { runCodingTask } from "../../../../../lib/agents/tools/coding-task-adapt
 import { appendAssistantMessage, getOrCreateAgentThread, setAgentCodexThreadId } from "../../../../../lib/agents/thread-service";
 import type { CodingRunView } from "../../../../../lib/coding-runs/types";
 import { adaptiveResponseStyleInstructions } from "../../../../../lib/agents/response-style";
+import { buildCodingCommitMessage } from "../../../../../lib/coding-runs/commit-message";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -81,7 +82,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       apiKey: resolved.apiKey,
       allowDirtyWorkingTree: true,
     });
-    const commitMessage = `Sugar Agent: ${engineeringTask.data.title}`.replace(/[\r\n]+/g, " ").slice(0, 200);
+    const commitMessage = buildCodingCommitMessage({
+      implementationSummary: result.implementationSummary,
+      changedFiles: result.changedFiles,
+    });
     const commit = await gitProvider.commitChanges(repository, commitMessage, true, result.changedFiles);
     const savedResult = {
       ...result,

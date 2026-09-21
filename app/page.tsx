@@ -4,6 +4,7 @@ import { SugarStudioApp } from "../components/SugarStudioApp";
 import type { Project } from "../components/types";
 import { createClient } from "../lib/supabase/server";
 import { redirect } from "next/navigation";
+import { orderProjectsByRecentConversation } from "../lib/projects/recent-order";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function Home() {
   }
 
   const projectIds = memberships.map((membership) => membership.project_id);
-  const [{ data: projectRows }, { data: snapshotRows }] = await Promise.all([
+  const [{ data: projectRows }, { data: snapshotRows }, { data: threadRows }] = await Promise.all([
     supabase
       .from("projects")
       .select("id, name, description, status, project_kind, created_at, updated_at")
@@ -52,11 +53,23 @@ export default async function Home() {
       .from("project_snapshots")
       .select("project_id, summary, current_plan_summary, current_stage")
       .in("project_id", projectIds),
+    supabase
+      .from("agent_threads")
+      .select("project_id, updated_at")
+      .eq("user_id", user.id)
+      .in("project_id", projectIds),
   ]);
 
   const membershipByProject = new Map(memberships.map((membership) => [membership.project_id, membership.role]));
   const snapshotByProject = new Map((snapshotRows ?? []).map((snapshot) => [snapshot.project_id, snapshot]));
-  const projects: Project[] = (projectRows ?? [])
+  const latestConversationByProject = new Map<string, string>();
+  for (const thread of threadRows ?? []) {
+    const current = latestConversationByProject.get(thread.project_id);
+    if (!current || Date.parse(thread.updated_at) > Date.parse(current)) {
+      latestConversationByProject.set(thread.project_id, thread.updated_at);
+    }
+  }
+  const projects: Project[] = orderProjectsByRecentConversation((projectRows ?? [])
     .filter((project) => project.project_kind !== "inbox")
     .map((project) => {
       const snapshot = snapshotByProject.get(project.id);
@@ -81,13 +94,9 @@ export default async function Home() {
           summary,
           currentPlanSummary,
         ].filter(Boolean),
+        lastConversationAt: latestConversationByProject.get(project.id) ?? null,
       } satisfies Project;
-    })
-    .sort((left, right) => {
-      if (left.status === "active" && right.status !== "active") return -1;
-      if (left.status !== "active" && right.status === "active") return 1;
-      return left.name.localeCompare(right.name, "zh-CN");
-    });
+    }));
 
   if (!projects.length) {
     return <NoProjectAccess displayName={displayName} email={email} />;

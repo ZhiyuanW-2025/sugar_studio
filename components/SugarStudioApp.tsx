@@ -19,6 +19,7 @@ import type { AgentAttachment, AgentSendResult, ActivityItem, AgentId, AgentTask
 import { WorkspaceDrawer } from "./WorkspaceDrawer";
 import { QuickHandoffModal } from "./QuickHandoffModal";
 import { UnarchivedFilesNotice } from "./UnarchivedFilesNotice";
+import { orderProjectsByRecentConversation } from "../lib/projects/recent-order";
 
 const initialActivity: ActivityItem[] = [
   { time: "12:41", text: "你保存了 Moon Moi 最新方案" },
@@ -252,6 +253,9 @@ export function SugarStudioApp({ currentUser, initialProjects, hasModelConfig }:
       }
       setMessages((current) => ({ ...current, [agentId]: payload.messages!.map(toChatMessage) }));
       if (payload.conversationId) setConversationIds((current) => ({ ...current, [agentId]: payload.conversationId! }));
+      setProjects((current) => orderProjectsByRecentConversation(current.map((item) => item.id === project.id
+        ? { ...item, lastConversationAt: new Date().toISOString() }
+        : item)));
     } catch (error) {
       if (!signal?.aborted) {
         setAgentErrors((current) => ({
@@ -740,7 +744,9 @@ export function SugarStudioApp({ currentUser, initialProjects, hasModelConfig }:
   };
 
   const handleProjectUpdated = (updated: Project) => {
-    setProjects((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setProjects((current) => orderProjectsByRecentConversation(current.map((item) => item.id === updated.id
+      ? { ...updated, lastConversationAt: item.lastConversationAt ?? updated.lastConversationAt ?? null }
+      : item)));
   };
 
   const composerDraftKey = (draftProjectId: string, agentId: AgentId) => `${draftProjectId}:${agentId}`;

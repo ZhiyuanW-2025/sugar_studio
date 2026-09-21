@@ -209,7 +209,7 @@ async function execute(input) {
     const thread = createCodex(input, repositoryPath, gitGuard, "workspace-write", codexThreadId);
     result = await thread.run([
       input.instructions,
-      "你现在直接执行以下用户已确认的工程任务。任务可能来自制作人小花的交办，也可能来自用户与工程师牛牛的当前对话；两者具有相同效力，不要求额外准备固定格式的任务文档。用户已明确点击执行，可以修改当前 working tree。严格遵守任务边界，不要再次要求确认。不要改变 Git 状态，不要访问仓库外路径，不要创建 PR、合并或部署。完成后运行仓库已有且与改动相关的测试、lint 或 build。最终回复只需用中文自然、简洁地说明完成了什么以及仍存在的阻塞；不要列出验证命令、退出状态、修改文件清单或 Commit/Push 状态，这些信息会由 Sugar Agent 界面单独展示。",
+      "你现在直接执行以下用户已确认的工程任务。任务可能来自制作人小花的交办，也可能来自用户与工程师牛牛的当前对话；两者具有相同效力，不要求额外准备固定格式的任务文档。用户已明确点击执行，可以修改当前 working tree。严格遵守任务边界，不要再次要求确认。不要改变 Git 状态，不要访问仓库外路径，不要创建 PR、合并或部署。完成后运行仓库已有且与改动相关的测试、lint 或 build。最终回复只需用中文自然、简洁地说明完成了什么以及仍存在的阻塞；第一句必须依据最终代码改动概括实际完成结果，不要只是复述用户原始要求。不要列出验证命令、退出状态、修改文件清单或 Commit/Push 状态，这些信息会由 Sugar Agent 界面单独展示。",
       `执行前分支：${beforeStatus.currentBranch}`,
       `执行前 HEAD：${beforeStatus.headCommit}`,
       `执行前未提交文件：${beforeStatus.changes.map((item) => item.path).join("、") || "无"}`,

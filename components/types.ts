@@ -63,4 +63,5 @@ export type Project = {
   focus: string;
   module: string;
   knowledge: string[];
+  lastConversationAt?: string | null;
 };

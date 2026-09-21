@@ -278,6 +278,8 @@ test("keeps Codex in the bound repository without secrets or Git mutation", asyn
   assert.match(agentPanel, /【Push】同步至远端我的分支/);
   assert.match(agentPanel, /【Sync】拉取主干合并到我的分支/);
   assert.match(executeRoute, /commitChanges\(repository, commitMessage, true, result\.changedFiles\)/);
+  assert.match(executeRoute, /buildCodingCommitMessage/);
+  assert.doesNotMatch(executeRoute, /commitMessage[^\n]*engineeringTask\.data\.title/);
   assert.match(executeRoute, /status: "completed"/);
   assert.doesNotMatch(codingRunsPanel, /window\.prompt|window\.confirm/);
   assert.match(codingRunsPanel, /border border-\[#d5ddd8\]/);
