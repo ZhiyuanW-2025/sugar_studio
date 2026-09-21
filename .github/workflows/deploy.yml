@@ -9,16 +9,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     container:
-      image: ci-node-rsync:20
+      image: ci-node-rsync:22
 
     steps:
       - name: Checkout code
         uses: https://${{ secrets.ACTION_USER }}:${{ secrets.ACTION_PASS }}@github.fdcity.cn/actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: https://${{ secrets.ACTION_USER }}:${{ secrets.ACTION_PASS }}@github.fdcity.cn/actions/setup-node@v3
-        with:
-          node-version: '22'
 
       - name: Install dependencies
         run: npm ci
