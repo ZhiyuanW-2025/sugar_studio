@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+@theme {
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-control: 0.8125rem;
+  --text-control--line-height: 1.25rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-chat: 0.9375rem;
+  --text-chat--line-height: 1.625rem;
+  --text-panel-title: 1rem;
+  --text-panel-title--line-height: 1.5rem;
+  --text-section-title: 1.125rem;
+  --text-section-title--line-height: 1.625rem;
+  --text-page-title: 1.5rem;
+  --text-page-title--line-height: 2rem;
+}
+
 :root {
   --ink: #181816;
   --muted: #73736d;
@@ -35,8 +54,254 @@ input {
   font: inherit;
 }
 
+/* Keep controls readable and consistent across feature panels. Icon-only buttons
+   carry an aria-label and retain their explicitly assigned icon size. */
+button:not([aria-label]) {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+select[class] {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+input[class]:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+textarea[class] {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
+  transition: transform 80ms ease, filter 120ms ease, opacity 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+button:not(:disabled),
+a[href],
+label:has(input[type="file"]) {
+  cursor: pointer;
+}
+
+button:not(:disabled):active,
+button[data-ui-pressed="true"],
+a[href][data-ui-pressed="true"],
+label[data-ui-pressed="true"] {
+  transform: translateY(1px) scale(0.985);
+  filter: brightness(0.96);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button[aria-busy="true"] {
+  cursor: wait;
+}
+
+.global-action-progress {
+  position: fixed;
+  z-index: 200;
+  inset: 0 auto auto 0;
+  height: 2px;
+  width: 38%;
+  background: #386b57;
+  box-shadow: 0 0 8px rgb(56 107 87 / 25%);
+  animation: global-progress 1.1s ease-in-out infinite;
+}
+
+.global-action-feedback {
+  position: fixed;
+  z-index: 199;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 280px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid #deded8;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 8px 24px rgb(24 24 20 / 10%);
+  color: #60615b;
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  animation: feedback-in 120ms ease-out;
+}
+
+.global-action-feedback__mark {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 999px;
+  background: #47715e;
+}
+
+.global-action-feedback[data-kind="loading"] .global-action-feedback__mark {
+  border: 1.5px solid #b8c9c0;
+  border-top-color: #386b57;
+  background: transparent;
+  animation: action-spin 650ms linear infinite;
+}
+
+.global-action-feedback[data-kind="error"] {
+  border-color: #ead9d2;
+  color: #895c49;
+}
+
+.global-action-feedback[data-kind="error"] .global-action-feedback__mark {
+  background: #a96c5c;
+}
+
+@keyframes global-progress {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(365%); }
+}
+
+@keyframes action-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes feedback-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-stage {
+  background:
+    radial-gradient(circle at 78% 15%, rgb(211 202 183 / 28%), transparent 26%),
+    #f4f1ea;
+}
+
+.auth-story::after {
+  position: absolute;
+  inset: auto -12% -34% 18%;
+  height: 62%;
+  border: 1px solid rgb(232 218 194 / 13%);
+  border-radius: 50%;
+  content: "";
+  transform: rotate(-7deg);
+}
+
+.auth-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.055;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.auth-orbit {
+  position: absolute;
+  border: 1px solid rgb(209 185 149 / 12%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.auth-orbit-one {
+  top: 11%;
+  right: -20%;
+  width: 58%;
+  aspect-ratio: 1;
+  animation: auth-drift 16s ease-in-out infinite;
+}
+
+.auth-orbit-two {
+  top: 20%;
+  right: -9%;
+  width: 36%;
+  aspect-ratio: 1;
+  animation: auth-drift 12s ease-in-out -3s infinite reverse;
+}
+
+.auth-agent-card {
+  animation: auth-card-in 520ms cubic-bezier(.2,.8,.2,1) both;
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+.auth-agent-card:hover {
+  border-color: rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 8%);
+  transform: translateY(-2px);
+}
+
+.auth-form-enter {
+  animation: auth-form-in 560ms cubic-bezier(.16,.82,.29,1) both;
+}
+
+.auth-tab-indicator {
+  transition: transform 280ms cubic-bezier(.2,.8,.2,1);
+}
+
+.auth-field > span:first-child {
+  display: block;
+  margin-bottom: 7px;
+  color: #5f5d55;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.auth-field input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid #d8d4ca;
+  border-radius: 10px;
+  outline: none;
+  background: rgb(252 251 247 / 88%);
+  padding: 0 13px;
+  color: #23251f;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.auth-field input::placeholder { color: #aaa69c; }
+.auth-field input:focus {
+  border-color: #789788;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(75 112 94 / 9%);
+}
+
+.auth-eye svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.auth-message {
+  border-radius: 9px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 19px;
+  animation: feedback-in 140ms ease-out;
+}
+.auth-message-error { border: 1px solid #ead5cb; background: #f8eeea; color: #8b4d40; }
+.auth-message-success { border: 1px solid #cfddd4; background: #eef5f0; color: #486858; }
+
+@keyframes auth-form-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes auth-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes auth-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-12px, 8px, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-orbit,
+  .auth-agent-card,
+  .auth-form-enter { animation: none; }
+  .auth-tab-indicator { transition: none; }
 }
 
 .subtle-scrollbar {
@@ -56,6 +321,30 @@ button {
 .subtle-scrollbar::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: #d9d8d2;
+}
+
+.hidden-scrollbar {
+  scrollbar-width: none;
+}
+
+.hidden-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Agent tabs remain horizontally scrollable when many are open, but the
+   browser must never draw its native scrollbar as a dark underline. */
+.agent-tab-strip {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.agent-tab-strip::-webkit-scrollbar,
+.agent-tab-strip::-webkit-scrollbar-track,
+.agent-tab-strip::-webkit-scrollbar-thumb {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 @keyframes panel-in {

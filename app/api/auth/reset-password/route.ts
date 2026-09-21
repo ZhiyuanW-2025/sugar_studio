@@ -1,0 +1,3 @@
+import { createClient } from "../../../../lib/supabase/server";
+export const dynamic="force-dynamic"; const headers={"Cache-Control":"no-store"};
+export async function POST(request:Request){ const body=await request.json().catch(()=>null); const email=typeof body?.email==="string"?body.email.trim():""; if(!email||email.length>320)return Response.json({error:"请输入有效邮箱。"},{status:400,headers}); const supabase=await createClient(); const origin=new URL(request.url).origin; await supabase.auth.resetPasswordForEmail(email,{redirectTo:`${origin}/auth/callback?next=/settings/account`}); return Response.json({sent:true,message:"如果该邮箱存在，你会收到密码重置邮件。"},{headers}); }
