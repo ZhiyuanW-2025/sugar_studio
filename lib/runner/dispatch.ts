@@ -50,19 +50,31 @@ async function directRequest<T>(path: RunnerPath, body: unknown): Promise<T> {
   return payload;
 }
 
-async function deviceRequest<T>(userId: string, path: RunnerPath, body: unknown, timeoutMs: number): Promise<T> {
+async function deviceRequest<T>(
+  userId: string,
+  deviceId: string | null | undefined,
+  path: RunnerPath,
+  body: unknown,
+  timeoutMs: number,
+): Promise<T> {
   const admin = createAdminClient();
   const onlineCutoff = new Date(Date.now() - 120_000).toISOString();
-  const { data: device } = await admin.from("runner_devices")
+  let query = admin.from("runner_devices")
     .select("id,name,last_seen_at")
     .eq("user_id", userId)
     .eq("status", "active")
-    .gte("last_seen_at", onlineCutoff)
-    .order("last_seen_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .gte("last_seen_at", onlineCutoff);
+  query = deviceId
+    ? query.eq("id", deviceId)
+    : query.order("last_seen_at", { ascending: false }).limit(1);
+  const { data: device } = await query.maybeSingle();
   if (!device) {
-    throw new UserRunnerError("Sugar Runner 未在线。请在账户设置中完成配对，并保持本地助手运行。", "runner_offline");
+    throw new UserRunnerError(
+      deviceId
+        ? "当前项目绑定的 Sugar Runner 未在线，请打开对应电脑上的本地助手。"
+        : "Sugar Runner 未在线。请在账户设置中完成配对，并保持本地助手运行。",
+      "runner_offline",
+    );
   }
 
   const expiresAt = new Date(Date.now() + timeoutMs + 30_000).toISOString();
@@ -106,6 +118,7 @@ async function deviceRequest<T>(userId: string, path: RunnerPath, body: unknown,
 
 export async function requestUserRunner<T>(input: {
   userId: string;
+  deviceId?: string | null;
   path: RunnerPath;
   body: unknown;
   timeoutMs?: number;
@@ -115,5 +128,5 @@ export async function requestUserRunner<T>(input: {
   if (transport === "direct" || (transport === "auto" && hasDirectRunner && process.env.NODE_ENV !== "production")) {
     return directRequest<T>(input.path, input.body);
   }
-  return deviceRequest<T>(input.userId, input.path, input.body, input.timeoutMs ?? 300_000);
+  return deviceRequest<T>(input.userId, input.deviceId, input.path, input.body, input.timeoutMs ?? 300_000);
 }

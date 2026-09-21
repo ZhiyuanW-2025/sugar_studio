@@ -1,12 +1,12 @@
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rename, rm, stat, writeFile, chmod } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile, chmod } from "node:fs/promises";
 import { homedir, hostname, platform } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
-const appVersion = "1.0.0";
+const appVersion = "1.1.0";
 const appDirectory = path.dirname(fileURLToPath(import.meta.url));
 const dataDirectory = process.env.SUGAR_RUNNER_DATA_DIR
   ? path.resolve(process.env.SUGAR_RUNNER_DATA_DIR)
@@ -19,6 +19,7 @@ let config = null;
 let coreProcess = null;
 let polling = false;
 let pollTimer = null;
+let paused = false;
 let status = { state: "setup", message: "等待配对", lastSeenAt: null };
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -30,8 +31,14 @@ const safeJson = (response, code, payload) => {
 async function loadConfig() {
   try {
     const parsed = JSON.parse(await readFile(configPath, "utf8"));
-    if (!parsed.cloudUrl || !parsed.deviceToken || !Array.isArray(parsed.allowedRoots)) return null;
-    return parsed;
+    if (!parsed.cloudUrl || !parsed.deviceToken || !parsed.deviceId) return null;
+    return {
+      cloudUrl: parsed.cloudUrl,
+      deviceId: parsed.deviceId,
+      deviceName: parsed.deviceName || hostname(),
+      deviceToken: parsed.deviceToken,
+      localSecret: parsed.localSecret || randomBytes(32).toString("base64url"),
+    };
   } catch {
     return null;
   }
@@ -54,17 +61,6 @@ function normalizeCloudUrl(value) {
   return parsed.toString().replace(/\/$/, "");
 }
 
-async function validateRoots(values) {
-  const roots = [...new Set(values.map((item) => String(item).trim()).filter(Boolean))];
-  if (!roots.length) throw new Error("请至少选择一个允许 Sugar Runner 访问的代码目录。");
-  for (const root of roots) {
-    if (!path.isAbsolute(root) || root === path.parse(root).root) throw new Error("代码目录必须是非根目录的绝对路径。");
-    const info = await stat(root).catch(() => null);
-    if (!info?.isDirectory()) throw new Error(`目录不存在：${root}`);
-  }
-  return roots;
-}
-
 function stopCore() {
   if (coreProcess && !coreProcess.killed) coreProcess.kill("SIGTERM");
   coreProcess = null;
@@ -79,7 +75,7 @@ async function startCore() {
       SUGAR_CODEX_RUNNER_HOST: "127.0.0.1",
       SUGAR_CODEX_RUNNER_PORT: String(corePort),
       SUGAR_CODEX_RUNNER_SECRET: config.localSecret,
-      SUGAR_LOCAL_REPOSITORY_ROOTS: config.allowedRoots.join(path.delimiter),
+      SUGAR_RUNNER_PAIRED_DEVICE_MODE: "true",
       SUGAR_RUNNER_ISOLATED: "true",
     },
     stdio: ["ignore", "ignore", "ignore"],
@@ -125,7 +121,7 @@ async function executeJob(job) {
 }
 
 async function pollOnce() {
-  if (!config || polling) return;
+  if (!config || polling || paused) return;
   polling = true;
   try {
     const response = await fetch(`${config.cloudUrl}/api/runner/poll`, {
@@ -162,6 +158,23 @@ function schedulePolling() {
   void pollOnce();
 }
 
+async function unpair() {
+  const previous = config;
+  paused = false;
+  config = null;
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+  stopCore();
+  if (previous) {
+    await fetch(`${previous.cloudUrl}/api/runner/unpair`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${previous.deviceToken}` },
+    }).catch(() => undefined);
+  }
+  await rm(configPath, { force: true }).catch(() => undefined);
+  status = { state: "setup", message: "等待配对", lastSeenAt: null };
+}
+
 async function readBody(request) {
   let text = "";
   for await (const chunk of request) {
@@ -179,10 +192,9 @@ function escapeHtml(value) {
 
 function page() {
   const connected = Boolean(config);
-  const roots = connected ? config.allowedRoots.join("\n") : path.join(homedir(), "Projects");
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sugar Runner</title><style>
-  :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#242521;background:#f4f4f0}*{box-sizing:border-box}body{margin:0}.shell{max-width:760px;margin:56px auto;padding:0 24px}.brand{display:flex;align-items:center;gap:13px}.logo{width:44px;height:44px;border-radius:12px;background:#243f34;color:white;display:grid;place-items:center;font-weight:700}.card{margin-top:28px;background:white;border:1px solid #deded8;border-radius:14px;padding:24px;box-shadow:0 12px 40px rgba(40,42,36,.06)}h1{font-size:22px;margin:0}h2{font-size:17px;margin:0 0 8px}p{color:#74756e;line-height:1.6;margin:6px 0}.state{display:flex;gap:10px;align-items:center;padding:14px;border-radius:10px;background:#f4f7f5}.dot{width:9px;height:9px;border-radius:50%;background:${status.state === "online" ? "#4f9a71" : status.state === "working" ? "#d2a53f" : status.state === "error" ? "#bf6257" : "#8099ac"}}label{display:block;margin-top:17px;font-size:13px;color:#5d5e57}input,textarea{margin-top:7px;width:100%;border:1px solid #d8d8d1;border-radius:9px;padding:11px 12px;font:inherit;outline:none}input:focus,textarea:focus{border-color:#758d81}button{margin-top:18px;border:0;border-radius:9px;background:#243f34;color:white;font-size:14px;padding:11px 18px;cursor:pointer}button:disabled{opacity:.5}.fine{font-size:12px}.hidden{display:none}.notice{margin-top:13px;font-size:13px;color:#8e5549}</style></head><body><main class="shell"><div class="brand"><div class="logo">S</div><div><h1>Sugar Runner</h1><p class="fine">让工程师牛牛安全使用这台 Mac 上的代码仓库</p></div></div><section class="card"><div class="state"><span class="dot"></span><div><strong id="statusTitle">${connected ? escapeHtml(config.deviceName) : "尚未配对"}</strong><p id="statusText" class="fine">${escapeHtml(status.message)}</p></div></div><div id="setup" class="${connected ? "hidden" : ""}"><h2 style="margin-top:24px">连接 Sugar Agent</h2><p>在 Sugar Agent 的“账户设置 → Sugar Runner”生成配对码，然后填在这里。</p><label>Sugar Agent 网站地址<input id="cloudUrl" placeholder="https://agent.your-studio.com" value="${escapeHtml(process.env.SUGAR_AGENT_URL || "http://localhost:3000")}"></label><label>8 位配对码<input id="pairingCode" inputmode="numeric" placeholder="1234 5678"></label><label>这台电脑的名称<input id="deviceName" value="${escapeHtml(hostname())}"></label><label>允许访问的代码目录（每行一个）<textarea id="roots" rows="4">${escapeHtml(roots)}</textarea></label><button id="pair">连接本地助手</button><p id="notice" class="notice"></p></div><div id="connected" class="${connected ? "" : "hidden"}"><h2 style="margin-top:24px">已允许访问的目录</h2><p style="white-space:pre-line">${escapeHtml(roots)}</p><p class="fine">关闭窗口不会停止服务；退出 Sugar Runner 后，牛牛将不能访问这台电脑。</p><button id="open" type="button">打开 Sugar Agent</button></div></section></main><script>
-const q=(id)=>document.getElementById(id);q('pair')?.addEventListener('click',async()=>{q('pair').disabled=true;q('notice').textContent='正在配对…';try{const response=await fetch('/api/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cloudUrl:q('cloudUrl').value,code:q('pairingCode').value,deviceName:q('deviceName').value,allowedRoots:q('roots').value.split('\\n')})});const body=await response.json();if(!response.ok)throw new Error(body.error||'配对失败');location.reload()}catch(error){q('notice').textContent=error.message;q('pair').disabled=false}});q('open')?.addEventListener('click',()=>window.open(${JSON.stringify(config?.cloudUrl || "http://localhost:3000")},'_blank'));setInterval(async()=>{try{const body=await fetch('/api/status').then(r=>r.json());q('statusText').textContent=body.message}catch{}},1500);
+  :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#242521;background:#f4f4f0}*{box-sizing:border-box}body{margin:0}.shell{max-width:700px;margin:48px auto;padding:0 24px}.brand{display:flex;align-items:center;gap:13px}.logo{width:44px;height:44px;border-radius:12px;background:#243f34;color:white;display:grid;place-items:center;font-weight:700}.card{margin-top:26px;background:white;border:1px solid #deded8;border-radius:14px;padding:24px;box-shadow:0 12px 40px rgba(40,42,36,.06)}h1{font-size:22px;margin:0}h2{font-size:17px;margin:0 0 8px}p{color:#74756e;line-height:1.6;margin:6px 0}.state{display:flex;gap:10px;align-items:center;padding:14px;border-radius:10px;background:#f4f7f5}.dot{width:9px;height:9px;border-radius:50%;background:${status.state === "online" ? "#4f9a71" : status.state === "working" ? "#d2a53f" : status.state === "error" ? "#bf6257" : "#8099ac"}}label{display:block;margin-top:17px;font-size:13px;color:#5d5e57}input{margin-top:7px;width:100%;border:1px solid #d8d8d1;border-radius:9px;padding:11px 12px;font:inherit;outline:none}input:focus{border-color:#758d81}.actions{display:flex;gap:10px;align-items:center}.button{margin-top:18px;border:0;border-radius:9px;background:#243f34;color:white;font-size:14px;padding:11px 18px;cursor:pointer}.button.secondary{background:white;color:#4f5f58;border:1px solid #d8ddd9}.button.danger{background:white;color:#955c50;border:1px solid #eadbd5}.button:disabled{opacity:.5}.fine{font-size:12px}.hidden{display:none}.notice{margin-top:13px;font-size:13px;color:#8e5549}.trust{margin-top:18px;border-top:1px solid #ecece7;padding-top:16px;font-size:13px;color:#77776f}</style></head><body><main class="shell"><div class="brand"><div class="logo">S</div><div><h1>Sugar Runner</h1><p class="fine">让工程师牛牛安全使用这台 Mac 上的代码仓库</p></div></div><section class="card"><div class="state"><span class="dot"></span><div><strong id="statusTitle">${connected ? escapeHtml(config.deviceName) : "尚未配对"}</strong><p id="statusText" class="fine">${escapeHtml(status.message)}</p></div></div><div id="setup" class="${connected ? "hidden" : ""}"><h2 style="margin-top:24px">连接 Sugar Agent</h2><p>在 Sugar Agent 的“账户设置 → Sugar Runner”生成一次性配对码，然后填在这里。</p><label>Sugar Agent 网站地址<input id="cloudUrl" placeholder="https://agent.your-studio.com" value="${escapeHtml(process.env.SUGAR_AGENT_URL || "http://localhost:3000")}"></label><label>8 位配对码<input id="pairingCode" inputmode="numeric" autocomplete="one-time-code" placeholder="1234 5678"></label><label>这台电脑的名称<input id="deviceName" value="${escapeHtml(hostname())}"></label><p class="trust">配对后，你可以在 Sugar Agent 的项目“代码仓库”页面绑定这台 Mac 上的本地 Git 仓库。牛牛只会访问平台中明确绑定的精确仓库路径。</p><button class="button" id="pair">连接本地助手</button><p id="notice" class="notice"></p></div><div id="connected" class="${connected ? "" : "hidden"}"><h2 style="margin-top:24px">本地助手已连接</h2><p>代码仓库的绑定、修改与解除均在 Sugar Agent 项目的“代码仓库”页面完成。</p><p class="fine">关闭此窗口不会停止服务；菜单栏中的 Sugar Runner 会持续自动连接并领取任务。</p><div class="actions"><button class="button" id="open" type="button">打开 Sugar Agent</button><button class="button danger" id="unpair" type="button">解除配对</button></div></div></section></main><script>
+const q=(id)=>document.getElementById(id);q('pair')?.addEventListener('click',async()=>{q('pair').disabled=true;q('notice').textContent='正在配对…';try{const response=await fetch('/api/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cloudUrl:q('cloudUrl').value,code:q('pairingCode').value,deviceName:q('deviceName').value})});const body=await response.json();if(!response.ok)throw new Error(body.error||'配对失败');location.reload()}catch(error){q('notice').textContent=error.message;q('pair').disabled=false}});q('open')?.addEventListener('click',()=>window.open(${JSON.stringify(config?.cloudUrl || "http://localhost:3000")},'_blank'));q('unpair')?.addEventListener('click',async()=>{if(!confirm('解除这台电脑与 Sugar Agent 的配对？'))return;await fetch('/api/unpair',{method:'POST'});location.reload()});setInterval(async()=>{try{const body=await fetch('/api/status').then(r=>r.json());q('statusText').textContent=body.message}catch{}},1500);
 </script></body></html>`;
 }
 
@@ -195,11 +207,35 @@ const uiServer = createServer(async (request, response) => {
     return response.end(page());
   }
   if (request.method === "GET" && request.url === "/api/status") return safeJson(response, 200, status);
+  if (request.method === "GET" && request.url === "/api/config") {
+    return safeJson(response, 200, {
+      connected: Boolean(config),
+      cloudUrl: config?.cloudUrl || null,
+      deviceName: config?.deviceName || null,
+      paused,
+    });
+  }
+  if (request.method === "POST" && request.url === "/api/pause") {
+    paused = true;
+    status = { ...status, state: "paused", message: "已暂停接收任务" };
+    return safeJson(response, 200, { paused: true });
+  }
+  if (request.method === "POST" && request.url === "/api/resume") {
+    paused = false;
+    status = config
+      ? { ...status, state: "online", message: "正在重新连接 Sugar Agent…" }
+      : { state: "setup", message: "等待配对", lastSeenAt: null };
+    if (config) schedulePolling();
+    return safeJson(response, 200, { paused: false });
+  }
+  if (request.method === "POST" && request.url === "/api/unpair") {
+    await unpair();
+    return safeJson(response, 200, { connected: false });
+  }
   if (request.method === "POST" && request.url === "/api/configure") {
     try {
       const body = await readBody(request);
       const cloudUrl = normalizeCloudUrl(body.cloudUrl);
-      const allowedRoots = await validateRoots(body.allowedRoots || []);
       const pairingResponse = await fetch(`${cloudUrl}/api/runner/pair`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -218,7 +254,6 @@ const uiServer = createServer(async (request, response) => {
         deviceName: paired.deviceName,
         deviceToken: paired.deviceToken,
         localSecret: randomBytes(32).toString("base64url"),
-        allowedRoots,
       };
       await saveConfig(config);
       await startCore();

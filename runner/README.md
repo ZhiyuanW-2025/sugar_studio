@@ -4,7 +4,8 @@ Runner 是 Sugar Agent 的本机执行面。Web 应用不会直接读取文件�
 
 ## 安全边界
 
-- `SUGAR_LOCAL_REPOSITORY_ROOTS` 是唯一可绑定路径白名单；Runner 会解析 realpath，并要求绑定路径正好是 Git 顶层目录。
+- 本地开发的 direct 模式继续使用 `SUGAR_LOCAL_REPOSITORY_ROOTS` 白名单。
+- 线上 device 模式在首次配对后，由 Sugar Agent 项目“代码仓库”页面保存精确仓库路径；Runner 会解析 realpath，并要求该路径正好是 Git 顶层目录，同时拒绝用户主目录和系统敏感目录。
 - 所有 Runner 发起的 Git 命令都使用参数数组、`shell: false` 与经过收敛的环境变量。
 - 牛牛的普通对话由 Codex 直接处理，使用 `read-only`；用户确认小花交办的任务，或从牛牛当前对话点击“确认并执行”时，恢复同一 Codex thread 并切换为 `workspace-write`。
 - Codex 的 `workingDirectory` 直接指向绑定仓库，关闭网络，并通过 Git wrapper 禁止修改 Git 状态。

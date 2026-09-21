@@ -74,12 +74,12 @@ This starter does not use `wrangler.jsonc`.
 
 Web 应用只负责鉴权、数据和审批控制面。真实文件与 Git 操作由每位用户 Mac 上的 Sugar Runner 执行：牛牛通过 `@openai/codex-sdk` 连接 Codex。普通对话使用只读模式；明确执行时恢复同一 Codex thread，并把 `workingDirectory` 设为项目绑定的现有本地 Git Repository。
 
-线上使用采用“设备模式”：用户在“账户设置 → Sugar Runner”生成一次性配对码，在本地助手中填入网站地址、配对码和允许访问的代码目录。Runner 只通过 HTTPS 主动领取属于该用户的任务，无需公网暴露本机端口。设备 token 只保存在该 Mac；服务端只存 SHA-256 hash。OpenAI Key 不写入 Runner 任务表，由服务端在已认证设备领取 Codex 任务时临时提供。
+线上使用采用“设备模式”：用户在“账户设置 → Sugar Runner”生成一次性配对码，在本地助手中只填写网站地址、配对码和设备名称。配对后，用户在每个项目的“代码仓库”页面选择该设备并绑定精确的本地 Git 仓库路径；新增、修改和解除仓库绑定均在 Sugar Agent 平台完成。Runner 只接受合法 Git 根目录，拒绝用户主目录、系统敏感目录和仓库外路径。Runner 只通过 HTTPS 主动领取属于该用户与设备的任务，无需公网暴露本机端口。设备 token 只保存在该 Mac；服务端只存 SHA-256 hash。OpenAI Key 不写入 Runner 任务表，由服务端在已认证设备领取 Codex 任务时临时提供。
 
 1. 执行 `npm run runner:build:mac` 生成当前 Mac 架构的 `.app` 与 `.dmg`。
 2. 将经过 Apple Developer ID 签名和 notarization 的 DMG 上传到下载服务，并配置 `NEXT_PUBLIC_SUGAR_RUNNER_DOWNLOAD_URL`。
 3. 线上设置 `SUGAR_RUNNER_TRANSPORT=device`；不要设置指向云服务器自身 `127.0.0.1` 的 Runner URL。
-4. 用户安装 Sugar Runner、完成一次性配对、选择允许访问的代码目录，再在项目“代码仓库”中绑定具体仓库路径。
+4. 用户安装 Sugar Runner、完成一次性配对，再在项目“代码仓库”中选择设备并绑定具体仓库路径。正式版常驻 macOS 菜单栏，安装到“应用程序”后自动注册为登录项；菜单栏支持暂停、恢复、打开平台和解除配对。
 
 本地开发仍可使用直接模式：配置 `SUGAR_RUNNER_TRANSPORT=direct`、`SUGAR_CODEX_RUNNER_URL`、`SUGAR_CODEX_RUNNER_SECRET`、`SUGAR_LOCAL_REPOSITORY_ROOTS` 和 `SUGAR_RUNNER_ISOLATED=true` 后运行 `npm run runner:start`。
 

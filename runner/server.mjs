@@ -13,6 +13,7 @@ import {
   LocalGitError,
   resolveAllowedRoots,
   resolveLocalRepository,
+  resolvePairedRepository,
   runCommand,
 } from "./local-git.mjs";
 
@@ -20,6 +21,7 @@ const host = process.env.SUGAR_CODEX_RUNNER_HOST || "127.0.0.1";
 const port = Number(process.env.SUGAR_CODEX_RUNNER_PORT || 4391);
 const sharedSecret = process.env.SUGAR_CODEX_RUNNER_SECRET;
 const isolated = process.env.SUGAR_RUNNER_ISOLATED === "true";
+const pairedDeviceMode = process.env.SUGAR_RUNNER_PAIRED_DEVICE_MODE === "true";
 const configuredRepositoryRoots = (process.env.SUGAR_LOCAL_REPOSITORY_ROOTS || "")
   .split(path.delimiter)
   .map((item) => item.trim())
@@ -58,14 +60,21 @@ function validateRepositoryInput(input) {
   if (typeof input.repository.localRepositoryPath !== "string") {
     throw new LocalGitError("invalid_repository", "本地仓库路径缺失。");
   }
+  if (!uuidPattern.test(input.repository.projectId)) {
+    throw new LocalGitError("invalid_repository", "项目仓库绑定无效。");
+  }
   return input.repository;
 }
 
 async function resolveInputRepository(input) {
   validateRunnerBoundary();
   const repository = validateRepositoryInput(input);
-  const allowedRoots = await resolveAllowedRoots(configuredRepositoryRoots);
-  const repositoryPath = await resolveLocalRepository(repository.localRepositoryPath, allowedRoots);
+  const repositoryPath = pairedDeviceMode
+    ? await resolvePairedRepository(repository.localRepositoryPath)
+    : await resolveLocalRepository(
+        repository.localRepositoryPath,
+        await resolveAllowedRoots(configuredRepositoryRoots),
+      );
   return { repository, repositoryPath };
 }
 

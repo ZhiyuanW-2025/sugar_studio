@@ -12,6 +12,7 @@ import {
   LocalGitError,
   resolveAllowedRoots,
   resolveLocalRepository,
+  resolvePairedRepository,
 } from "../runner/local-git.mjs";
 
 const executeFile = promisify(execFile);
@@ -105,6 +106,19 @@ test("recognizes a local repository and a non-GitHub remote", async () => {
     const dirty = await getRepositoryStatus(fixture.repositoryPath, "origin");
     assert.equal(dirty.clean, false);
     assert.deepEqual(dirty.changes.map((item) => item.path), ["含 空格.txt"]);
+  } finally {
+    await rm(container, { recursive: true, force: true });
+  }
+});
+
+test("paired device mode accepts only the exact Git repository root", async () => {
+  const container = await mkdtemp(path.join(tmpdir(), "sugar-paired-git-"));
+  try {
+    const fixture = await initializeRepository(container);
+    assert.equal(await resolvePairedRepository(fixture.repositoryPath), await realpath(fixture.repositoryPath));
+    await mkdir(path.join(fixture.repositoryPath, "nested"));
+    await expectLocalGitError(resolvePairedRepository(path.join(fixture.repositoryPath, "nested")), "invalid_repository");
+    await expectLocalGitError(resolvePairedRepository(container), "invalid_repository");
   } finally {
     await rm(container, { recursive: true, force: true });
   }
@@ -239,8 +253,10 @@ test("stops after a real pull conflict without destructive recovery", async () =
 });
 
 test("keeps Codex in the bound repository without secrets or Git mutation", async () => {
-  const [runner, envExample, provider, executeRoute, agentPanel, codingRunsPanel] = await Promise.all([
+  const [runner, desktop, deviceMigration, envExample, provider, executeRoute, agentPanel, codingRunsPanel] = await Promise.all([
     source("runner/server.mjs"),
+    source("runner/desktop.mjs"),
+    source("supabase/migrations/20260921030000_runner_project_device_bindings.sql"),
     source(".env.example"),
     source("lib/git/local-git-provider.ts"),
     source("app/api/coding-runs/[id]/execute/route.ts"),
@@ -248,6 +264,12 @@ test("keeps Codex in the bound repository without secrets or Git mutation", asyn
     source("components/CodingRunsPanel.tsx"),
   ]);
   assert.match(runner, /workingDirectory: repositoryPath/);
+  assert.match(runner, /resolvePairedRepository/);
+  assert.match(runner, /SUGAR_RUNNER_PAIRED_DEVICE_MODE/);
+  assert.doesNotMatch(desktop, /允许访问的代码目录/);
+  assert.match(desktop, /代码仓库.*页面完成/);
+  assert.match(deviceMigration, /runner_device_id uuid/);
+  assert.match(deviceMigration, /Runner device access denied/);
   assert.match(runner, /createCodex\(input, repositoryPath, gitGuard, "workspace-write"/);
   assert.match(runner, /JSON\.stringify\(input\.task/);
   assert.match(runner, /input\.run\.sourceKind === "niuniu_conversation"/);

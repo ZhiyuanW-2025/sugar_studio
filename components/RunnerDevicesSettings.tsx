@@ -64,12 +64,12 @@ export function RunnerDevicesSettings() {
 
   return <section className="rounded-[10px] border border-[#e1e0db] bg-white p-5">
     <div className="flex items-start justify-between gap-5">
-      <div><h2 className="text-body font-semibold">Sugar Runner 本地助手</h2><p className="mt-1 text-control text-[#88877f]">让工程师牛牛在你允许的目录中读取和修改代码。网站不会直接访问你的整台电脑。</p></div>
+      <div><h2 className="text-body font-semibold">Sugar Runner 本地助手</h2><p className="mt-1 text-control text-[#88877f]">配对这台 Mac 后，在各项目的“代码仓库”中绑定牛牛需要使用的精确 Git 仓库。</p></div>
       {downloadUrl ? <a href={downloadUrl} className="shrink-0 rounded border border-[#cfd8d2] px-3 py-2 text-control font-medium text-[#315d4d]">下载 macOS 版</a> : <span className="shrink-0 rounded bg-[#f1f1ed] px-3 py-2 text-control text-[#898981]">macOS 安装包待发布</span>}
     </div>
 
     <div className="mt-4 rounded-[8px] bg-[#f7f8f5] p-4">
-      <ol className="grid gap-2 text-control text-[#5f6059] sm:grid-cols-3"><li><strong className="mr-1 text-[#33342f]">1.</strong>安装并打开 Sugar Runner</li><li><strong className="mr-1 text-[#33342f]">2.</strong>在此生成一次性配对码</li><li><strong className="mr-1 text-[#33342f]">3.</strong>选择允许访问的代码目录</li></ol>
+      <ol className="grid gap-2 text-control text-[#5f6059] sm:grid-cols-2"><li><strong className="mr-1 text-[#33342f]">1.</strong>安装并打开 Sugar Runner</li><li><strong className="mr-1 text-[#33342f]">2.</strong>生成一次性配对码并完成连接</li></ol>
       <div className="mt-4 flex items-center gap-3">
         <button type="button" disabled={Boolean(busy)} onClick={() => void createPairing()} className="h-9 rounded bg-[#29463a] px-4 text-control font-medium text-white disabled:opacity-40">{busy === "pairing" ? "生成中…" : "生成配对码"}</button>
         {pairing && <div className="rounded border border-[#cfd8d2] bg-white px-4 py-2 font-mono text-[18px] tracking-[0.18em] text-[#29463a]" aria-label="Sugar Runner 配对码">{pairing.code}</div>}

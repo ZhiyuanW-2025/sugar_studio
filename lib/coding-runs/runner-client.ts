@@ -33,6 +33,7 @@ export async function invokeCodexRunner(input: {
   try {
     const payload = await requestUserRunner<{ result: CodingRunResult }>({
       userId: input.run.userId,
+      deviceId: input.repository.runnerDeviceId,
       path: "/v1/coding-runs/execute",
       timeoutMs: 300_000,
       body: {
@@ -74,6 +75,7 @@ export async function invokeCodexDiscussion(input: {
   try {
     const payload = await requestUserRunner<{ result: CodexDiscussionResult }>({
       userId: input.userId,
+      deviceId: input.repository?.runnerDeviceId,
       path: "/v1/codex/discuss",
       timeoutMs: 300_000,
       body: input,

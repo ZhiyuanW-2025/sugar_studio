@@ -35,6 +35,7 @@ export type RepositoryBinding = {
   id: string;
   projectId: string;
   provider: RepositoryProvider;
+  runnerDeviceId: string | null;
   localRepositoryPath: string;
   remoteName: string;
   remoteUrl: string | null;

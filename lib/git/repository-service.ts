@@ -7,6 +7,7 @@ import type { RepositoryBinding } from "./provider";
 const remoteName = z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9._-]+$/);
 
 export const repositoryInputSchema = z.object({
+  runnerDeviceId: z.string().uuid().nullable().optional().default(null),
   localRepositoryPath: z.string().trim().min(1).max(2048).refine(path.isAbsolute, "必须填写绝对路径"),
   remoteName: remoteName.default("origin"),
   remoteUrl: z.string().trim().max(2048).optional().default(""),
@@ -17,6 +18,7 @@ export function mapRepositoryRow(row: Record<string, unknown>, workspace?: Recor
     id: String(row.id),
     projectId: String(row.project_id),
     provider: String(row.provider || "local_git") as RepositoryBinding["provider"],
+    runnerDeviceId: workspace?.runner_device_id ? String(workspace.runner_device_id) : null,
     localRepositoryPath: String(workspace?.local_repository_path || row.local_repository_path || ""),
     remoteName: String(workspace?.remote_name || row.remote_name || "origin"),
     remoteUrl: row.remote_url ? String(row.remote_url) : null,

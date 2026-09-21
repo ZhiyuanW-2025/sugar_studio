@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -12,6 +12,7 @@ const resources = path.join(contents, "Resources");
 const appResources = path.join(resources, "app");
 const runtime = path.join(resources, "runtime");
 const nodeModules = path.join(appResources, "node_modules", "@openai");
+const dmgSource = path.join(distDirectory, "dmg-source");
 const architecture = process.arch === "arm64" ? "arm64" : "x64";
 
 async function officialNodeBinary() {
@@ -58,11 +59,17 @@ for (const packageName of ["codex-sdk", "codex", `codex-darwin-${architecture}`]
 }
 await writeFile(path.join(appResources, "package.json"), JSON.stringify({ type: "module", private: true }, null, 2));
 
-const launcher = `#!/bin/sh
-APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-exec "$APP_ROOT/Resources/runtime/node" "$APP_ROOT/Resources/app/desktop.mjs"
-`;
-await writeFile(path.join(macos, "Sugar Runner"), launcher, { mode: 0o755 });
+const swiftBuild = spawnSync("xcrun", [
+  "swiftc",
+  "-parse-as-library",
+  "-O",
+  "-framework", "AppKit",
+  "-framework", "WebKit",
+  "-framework", "ServiceManagement",
+  path.join(projectRoot, "runner", "macos", "SugarRunnerApp.swift"),
+  "-o", path.join(macos, "Sugar Runner"),
+], { stdio: "inherit" });
+if (swiftBuild.status !== 0) throw new Error("Unable to compile the native Sugar Runner host.");
 await chmod(path.join(macos, "Sugar Runner"), 0o755);
 await chmod(path.join(runtime, "node"), 0o755);
 await writeFile(path.join(contents, "Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>
@@ -71,15 +78,29 @@ await writeFile(path.join(contents, "Info.plist"), `<?xml version="1.0" encoding
 <key>CFBundleName</key><string>Sugar Runner</string>
 <key>CFBundleDisplayName</key><string>Sugar Runner</string>
 <key>CFBundleIdentifier</key><string>cn.sscd.sugar-runner</string>
-<key>CFBundleVersion</key><string>1.0.0</string>
-<key>CFBundleShortVersionString</key><string>1.0.0</string>
+<key>CFBundleVersion</key><string>1.1.0</string>
+<key>CFBundleShortVersionString</key><string>1.1.0</string>
 <key>CFBundleExecutable</key><string>Sugar Runner</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>LSUIElement</key><true/>
 </dict></plist>`);
 
-spawnSync("codesign", ["--force", "--deep", "--sign", "-", appPath], { stdio: "inherit" });
+const signingIdentity = process.env.SUGAR_RUNNER_CODESIGN_IDENTITY?.trim() || "-";
+const signArguments = ["--force", "--deep", "--sign", signingIdentity];
+if (signingIdentity !== "-") signArguments.push("--options", "runtime", "--timestamp");
+signArguments.push(appPath);
+const signing = spawnSync("codesign", signArguments, { stdio: "inherit" });
+if (signing.status !== 0) throw new Error("Unable to sign Sugar Runner.app.");
+
+await mkdir(dmgSource, { recursive: true });
+await cp(appPath, path.join(dmgSource, "Sugar Runner.app"), { recursive: true });
+await symlink("/Applications", path.join(dmgSource, "Applications"));
 const dmgPath = path.join(distDirectory, `Sugar-Runner-macOS-${architecture}.dmg`);
-const result = spawnSync("hdiutil", ["create", "-volname", "Sugar Runner", "-srcfolder", appPath, "-ov", "-format", "UDZO", dmgPath], { stdio: "inherit" });
+const result = spawnSync("hdiutil", ["create", "-volname", "Sugar Runner", "-srcfolder", dmgSource, "-ov", "-format", "UDZO", dmgPath], { stdio: "inherit" });
 if (result.status !== 0) process.exit(result.status ?? 1);
+await rm(dmgSource, { recursive: true, force: true });
+if (signingIdentity !== "-") {
+  const dmgSigning = spawnSync("codesign", ["--force", "--sign", signingIdentity, "--timestamp", dmgPath], { stdio: "inherit" });
+  if (dmgSigning.status !== 0) throw new Error("Unable to sign Sugar Runner DMG.");
+}
 process.stdout.write(`\nBuilt ${appPath}\nBuilt ${dmgPath}\n`);

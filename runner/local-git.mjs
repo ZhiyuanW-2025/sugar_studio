@@ -1,4 +1,5 @@
 import { access, realpath, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
@@ -109,6 +110,35 @@ export async function resolveLocalRepository(localRepositoryPath, allowedRoots) 
     throw new LocalGitError("invalid_repository", "必须绑定 Git Repository 根目录，不能绑定其子目录。");
   }
   return repositoryPath;
+}
+
+export async function resolvePairedRepository(localRepositoryPath) {
+  if (typeof localRepositoryPath !== "string" || !path.isAbsolute(localRepositoryPath)) {
+    throw new LocalGitError("invalid_repository", "本地仓库路径必须是绝对路径。");
+  }
+  let repositoryPath;
+  try {
+    repositoryPath = await realpath(localRepositoryPath);
+  } catch {
+    throw new LocalGitError("not_found", "本地仓库路径不存在。");
+  }
+
+  const homePath = await realpath(homedir());
+  const deniedPaths = [
+    homePath,
+    path.join(homePath, ".ssh"),
+    path.join(homePath, ".aws"),
+    path.join(homePath, ".gnupg"),
+    path.join(homePath, "Library"),
+  ];
+  if (
+    repositoryPath === path.parse(repositoryPath).root
+    || deniedPaths.some((denied) => repositoryPath === denied || repositoryPath.startsWith(`${denied}${path.sep}`))
+  ) {
+    throw new LocalGitError("forbidden", "该路径过于宽泛或属于系统敏感目录，不能绑定为代码仓库。");
+  }
+
+  return resolveLocalRepository(repositoryPath, [repositoryPath]);
 }
 
 function validateRemoteName(remoteName) {

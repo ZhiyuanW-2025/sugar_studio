@@ -10,9 +10,14 @@ import type {
 import { GitProviderError } from "./provider";
 import { requestUserRunner, UserRunnerError, type RunnerPath } from "../runner/dispatch";
 
-async function runnerRequest<T>(userId: string, path: RunnerPath, body: unknown): Promise<T> {
+async function runnerRequest<T>(
+  userId: string,
+  deviceId: string | null,
+  path: RunnerPath,
+  body: unknown,
+): Promise<T> {
   try {
-    return await requestUserRunner<T>({ userId, path, body, timeoutMs: 300_000 });
+    return await requestUserRunner<T>({ userId, deviceId, path, body, timeoutMs: 300_000 });
   } catch (error) {
     if (!(error instanceof UserRunnerError)) throw error;
     const code = error.code as GitProviderError["code"] | undefined;
@@ -35,7 +40,7 @@ async function runAction(
   if (!confirmed) {
     throw new GitProviderError("confirmation_required", `${action} 操作需要用户明确确认。`);
   }
-  const payload = await runnerRequest<{ result: GitActionResult }>(userId, "/v1/repositories/action", {
+  const payload = await runnerRequest<{ result: GitActionResult }>(userId, repository.runnerDeviceId, "/v1/repositories/action", {
     repository,
     action,
     confirmed,
@@ -46,10 +51,15 @@ async function runAction(
 }
 
 export class LocalGitProvider implements GitProvider {
-  constructor(private readonly userId: string) {}
+  constructor(private readonly userId: string, private readonly deviceId: string | null = null) {}
 
   async getRepositoryStatus(repository: RepositoryBinding) {
-    const payload = await runnerRequest<{ status: RepositoryStatus }>(this.userId, "/v1/repositories/inspect", { repository });
+    const payload = await runnerRequest<{ status: RepositoryStatus }>(
+      this.userId,
+      repository.runnerDeviceId || this.deviceId,
+      "/v1/repositories/inspect",
+      { repository },
+    );
     return payload.status;
   }
 
@@ -58,7 +68,12 @@ export class LocalGitProvider implements GitProvider {
   }
 
   async getDiff(repository: RepositoryBinding) {
-    const payload = await runnerRequest<{ summary: string; diff: string }>(this.userId, "/v1/repositories/diff", { repository });
+    const payload = await runnerRequest<{ summary: string; diff: string }>(
+      this.userId,
+      repository.runnerDeviceId || this.deviceId,
+      "/v1/repositories/diff",
+      { repository },
+    );
     return { summary: payload.summary, diff: payload.diff };
   }
 
@@ -83,6 +98,6 @@ export class LocalGitProvider implements GitProvider {
   }
 }
 
-export function getLocalGitProvider(userId: string) {
-  return new LocalGitProvider(userId);
+export function getLocalGitProvider(userId: string, deviceId: string | null = null) {
+  return new LocalGitProvider(userId, deviceId);
 }
