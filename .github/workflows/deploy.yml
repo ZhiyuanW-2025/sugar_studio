@@ -15,30 +15,26 @@ jobs:
       - name: Checkout code
         uses: https://${{ secrets.ACTION_USER }}:${{ secrets.ACTION_PASS }}@github.fdcity.cn/actions/checkout@v4
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
       - name: Setup SSH agent
         uses: https://${{ secrets.ACTION_USER }}:${{ secrets.ACTION_PASS }}@github.fdcity.cn/actions/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # vinext start 需要完整 dist/（client + server）。不要摊平 dist/client/，也不要 --delete 项目根目录。
-      - name: Deploy dist to server
+      # 只同步源码。NEXT_PUBLIC_* 必须在有 .env.local 的机器上打包，CI 里打的 client 不能用。
+      # 不要 --delete 项目根目录；只排除运行时文件，避免覆盖 .env.local / node_modules。
+      - name: Deploy source to server
         run: |
-          rsync -avz --delete --exclude '.env.local' -e "ssh -o StrictHostKeyChecking=no" \
-            dist/ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/dist/"
+          rsync -avz --delete \
+            --exclude '.git/' \
+            --exclude '.env.local' \
+            --exclude 'node_modules/' \
+            --exclude 'dist/' \
+            --exclude '.wrangler/' \
+            --exclude '.vinext/' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/"
 
-      - name: Deploy package files
-        run: |
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no" \
-            package.json package-lock.json \
-            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/"
-
-      - name: Reload application
+      - name: Build and reload application
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << EOF
             set -e
@@ -48,6 +44,7 @@ jobs:
 
             cd /var/www/sugar_studio
             npm ci
+            npm run build
 
             if pm2 describe sugar-studio >/dev/null 2>&1; then
               pm2 reload sugar-studio
