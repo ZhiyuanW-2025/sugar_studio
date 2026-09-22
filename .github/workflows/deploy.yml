@@ -26,8 +26,38 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # vinext 构建产物：dist/client 为静态资源；dist/server 与 dist/.openai 仅用于 OpenAI/Cloudflare 托管，不部署到 Nginx
+      # vinext start 需要完整 dist/（client + server）。不要摊平 dist/client/，也不要 --delete 项目根目录。
       - name: Deploy dist to server
         run: |
-          rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
-            dist/client/ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/dist/"
+          rsync -avz --delete --exclude '.env.local' -e "ssh -o StrictHostKeyChecking=no" \
+            dist/ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/dist/"
+
+      - name: Deploy package files
+        run: |
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no" \
+            package.json package-lock.json \
+            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/"
+
+      - name: Reload application
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << EOF
+            set -e
+            export NVM_DIR="\$HOME/.nvm"
+            [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+            nvm use 22
+
+            cd /var/www/sugar_studio
+            npm ci
+
+            if pm2 describe sugar-studio >/dev/null 2>&1; then
+              pm2 reload sugar-studio
+            else
+              PORT=1428 VINEXT_TRUST_PROXY=1 VINEXT_TRUSTED_HOSTS=agent.fdcity.cn \
+                pm2 start "\$(command -v npm)" \
+                --name sugar-studio \
+                --cwd /var/www/sugar_studio \
+                --interpreter "\$(command -v node)" \
+                -- start
+              pm2 save
+            fi
+          EOF
