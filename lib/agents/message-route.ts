@@ -19,6 +19,7 @@ import { maybeCompactConversation } from "./conversation-summary";
 import type { KnowledgeAttachmentContext } from "./tools/save-knowledge-file-descriptions";
 import { linkFeishuChangeProposalsToMessage } from "../feishu/proposal-service";
 import { buildFullSkillInstructions, buildSkillMetadataInstructions, resolveActiveAgentSkills } from "./skill-service";
+import { buildAgentGeneralKnowledgeInstructions, buildAgentToolInstructions, resolveActiveAgentGeneralKnowledge, resolveAgentToolConfigsForType } from "./tool-config-service";
 import { createLoadAgentSkillTool } from "./tools/load-agent-skill";
 
 const responseHeaders = { "Cache-Control": "no-store" };
@@ -187,7 +188,9 @@ export function createAgentMessageHandlers(options: Options) {
       );
       const activeSkills = await resolveActiveAgentSkills(supabase, options.agentType);
       const loadedSkillSlugs: string[] = [];
-      let runInstructions = `${prompt.instructions}${options.agentType === "coding" ? buildFullSkillInstructions(activeSkills) : buildSkillMetadataInstructions(activeSkills)}`;
+      const generalKnowledge = await resolveActiveAgentGeneralKnowledge(supabase, options.agentType);
+      const configuredTools = await resolveAgentToolConfigsForType(supabase, options.agentType);
+      let runInstructions = `${prompt.instructions}${buildAgentGeneralKnowledgeInstructions(generalKnowledge)}${buildAgentToolInstructions(configuredTools)}${options.agentType === "coding" ? buildFullSkillInstructions(activeSkills) : buildSkillMetadataInstructions(activeSkills)}`;
       if (knowledgeAttachments.length > 0) {
         const readyIds = knowledgeAttachments.filter((item) => item.indexStatus === "ready").map((item) => item.documentId);
         if (readyIds.length > 0) {

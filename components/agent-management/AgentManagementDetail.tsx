@@ -10,16 +10,19 @@ import {
 import { AgentTestPanel, type AgentTestProject } from "./AgentTestPanel";
 import { AgentAvatar, refreshAgentAvatars, useAgentAvatarUrl } from "../AgentAvatar";
 import { AgentSkillManager } from "./AgentSkillManager";
+import { AgentToolManager } from "./AgentToolManager";
+import { AgentKnowledgeManager } from "./AgentKnowledgeManager";
 
 type Props = { agent: AgentDefinition; projects: AgentTestProject[] };
-type Tab = "basic" | "prompt" | "skills" | "model" | "knowledge" | "test";
+type Tab = "basic" | "prompt" | "skills" | "tools" | "knowledge" | "model" | "test";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "basic", label: "基本信息" },
   { id: "prompt", label: "提示词" },
   { id: "skills", label: "Skills" },
+  { id: "tools", label: "工具" },
+  { id: "knowledge", label: "知识" },
   { id: "model", label: "模型" },
-  { id: "knowledge", label: "知识与工具" },
   { id: "test", label: "测试" },
 ];
 
@@ -348,25 +351,9 @@ export function AgentManagementDetail({ agent, projects }: Props) {
 
         {tab === "skills" && <AgentSkillManager agent={agent} projects={projects} />}
 
-        {tab === "knowledge" && (
-          <div className="grid grid-cols-2 gap-8">
-            {[{ title: "知识来源", items: agent.knowledge }, { title: "工具", items: agent.tools }].map((group) => (
-              <section key={group.title}>
-                <h2 className="text-panel-title font-semibold">{group.title}</h2>
-                <div className="mt-4 divide-y divide-[#e8e7e2] border-y border-[#e8e7e2]">
-                  {group.items.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between py-3.5 text-body">
-                      <span className="text-[#55554f]">{item.label}</span>
-                      <span className={item.status === "enabled" ? "text-[#3f6b5a]" : "text-[#aaa9a1]"}>
-                        {item.status === "enabled" ? "已启用" : "尚未接入"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
+        {tab === "tools" && <AgentToolManager agent={agent} />}
+
+        {tab === "knowledge" && <AgentKnowledgeManager agent={agent} />}
 
         {tab === "test" && <AgentTestPanel agent={agent} projects={projects} />}
       </div>

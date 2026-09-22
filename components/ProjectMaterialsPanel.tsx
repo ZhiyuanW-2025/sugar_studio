@@ -31,8 +31,22 @@ type KnowledgeSyncResult = {
   documentIds?: string[];
   error?: string;
 };
+type PendingFeishuChange = {
+  id: string;
+  title: string;
+  sourceUrl: string | null;
+  latestEventAt: string;
+};
+type PendingFeishuChanges = {
+  eventCount: number;
+  documentCount: number;
+  latestEventAt: string | null;
+  scopeIds: string[];
+  documents: PendingFeishuChange[];
+};
 export type ProjectMaterialsPayload = {
   lastSyncedAt: string | null;
+  pendingFeishuChanges: PendingFeishuChanges;
   knowledgeScopes: KnowledgeScope[];
   driveScopes: DriveScope[];
   knowledgeItems: KnowledgeItem[];
@@ -159,8 +173,8 @@ function ConnectionSettings({ projectId, data, onClose, onChanged, onNotice }: {
       const response = await fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(target === "knowledge"
-          ? { projectId, sourceUrl, scopeType: "project", syncFrequency: "weekly" }
-          : { projectId, sourceUrl, syncFrequency: "weekly" }),
+          ? { projectId, sourceUrl, scopeType: "project", syncFrequency: "manual" }
+          : { projectId, sourceUrl, syncFrequency: "manual" }),
       });
       const payload = await response.json().catch(() => null) as { scope?: { id: string }; error?: string } | null;
       if (!response.ok || !payload?.scope) throw new Error(payload?.error || "连接失败。");
@@ -209,10 +223,10 @@ function ConnectionSettings({ projectId, data, onClose, onChanged, onNotice }: {
 
   return <div className="fixed inset-0 z-[80] grid place-items-center bg-[#171713]/20 px-5" role="dialog" aria-modal="true" aria-label="飞书连接设置">
     <div className="w-full max-w-[620px] rounded-[12px] border border-[#dddcd6] bg-white shadow-[0_24px_80px_rgba(20,20,16,0.18)]">
-      <header className="flex items-start border-b border-[#ebeae5] px-5 py-4"><div><h2 className="text-panel-title font-semibold text-[#2f302c]">连接设置</h2><p className="mt-1 text-caption text-[#999890]">连接后，项目材料目录会按照飞书中的结构自动更新。</p></div><button type="button" onClick={onClose} disabled={Boolean(busy)} className="ml-auto text-[18px] text-[#999890]">×</button></header>
+      <header className="flex items-start border-b border-[#ebeae5] px-5 py-4"><div><h2 className="text-panel-title font-semibold text-[#2f302c]">连接设置</h2><p className="mt-1 text-caption text-[#999890]">连接后，可在项目材料页查看飞书变化并确认同步。</p></div><button type="button" onClick={onClose} disabled={Boolean(busy)} className="ml-auto text-[18px] text-[#999890]">×</button></header>
       <div className="max-h-[72vh] space-y-5 overflow-y-auto p-5">
-        <section><h3 className="text-body font-semibold text-[#464741]">飞书知识库</h3><p className="mt-1 text-caption text-[#999890]">用于 DOCX、PDF、XLSX 等文档。</p>{data.knowledgeScopes.map((scope) => <div key={scope.id} className="mt-2 flex items-center gap-2 rounded-md border border-[#e5e4df] px-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-control font-medium text-[#55564f]">{scope.display_name}</p><p className="mt-0.5 text-micro text-[#aaa9a1]">{scope.last_sync_status === "ready" ? "已连接" : scope.last_sync_status === "failed" ? "同步失败" : "同步中"} · 每周同步</p></div><a href={scope.source_url} target="_blank" rel="noreferrer" className="text-caption text-[#65766e]">打开飞书 ↗</a><button type="button" onClick={() => void sync("knowledge", scope.id)} disabled={Boolean(busy)} className="h-7 rounded border border-[#deddd7] px-2 text-caption disabled:opacity-40">{busy === `sync:${scope.id}` ? "同步中…" : "立即同步"}</button></div>)}<div className="mt-2 flex gap-2"><input value={knowledgeUrl} onChange={(event) => setKnowledgeUrl(event.target.value)} disabled={Boolean(busy)} placeholder="粘贴飞书知识库地址" className="h-9 min-w-0 flex-1 rounded-md border border-[#deddd7] px-3 text-control outline-none" /><button type="button" onClick={() => void connect("knowledge")} disabled={!knowledgeUrl.trim() || Boolean(busy)} className="h-9 rounded-md bg-[#30342f] px-3 text-control text-white disabled:opacity-40">{busy === "connect:knowledge" || busy === "sync:knowledge" ? "连接中…" : "连接"}</button></div></section>
-        <section><h3 className="text-body font-semibold text-[#464741]">飞书云盘</h3><p className="mt-1 text-caption text-[#999890]">用于图片、视频和音频。</p>{data.driveScopes.map((scope) => <div key={scope.id} className="mt-2 flex items-center gap-2 rounded-md border border-[#e5e4df] px-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-control font-medium text-[#55564f]">{scope.display_name}</p><p className="mt-0.5 text-micro text-[#aaa9a1]">{scope.last_sync_status === "ready" ? "已连接" : scope.last_sync_status === "failed" ? "同步失败" : "同步中"} · 每周同步</p></div><a href={scope.source_url} target="_blank" rel="noreferrer" className="text-caption text-[#65766e]">打开飞书 ↗</a><button type="button" onClick={() => void sync("drive", scope.id)} disabled={Boolean(busy)} className="h-7 rounded border border-[#deddd7] px-2 text-caption disabled:opacity-40">{busy === `sync:${scope.id}` ? "同步中…" : "立即同步"}</button></div>)}<div className="mt-2 flex gap-2"><input value={driveUrl} onChange={(event) => setDriveUrl(event.target.value)} disabled={Boolean(busy)} placeholder="粘贴具体 /drive/folder/… 地址" className="h-9 min-w-0 flex-1 rounded-md border border-[#deddd7] px-3 text-control outline-none" /><button type="button" onClick={() => void connect("drive")} disabled={!driveUrl.trim() || Boolean(busy)} className="h-9 rounded-md bg-[#30342f] px-3 text-control text-white disabled:opacity-40">{busy === "connect:drive" || busy === "sync:drive" ? "连接中…" : "连接"}</button></div></section>
+        <section><h3 className="text-body font-semibold text-[#464741]">飞书知识库</h3><p className="mt-1 text-caption text-[#999890]">用于 DOCX、PDF、XLSX 等文档。</p>{data.knowledgeScopes.map((scope) => <div key={scope.id} className="mt-2 flex items-center gap-2 rounded-md border border-[#e5e4df] px-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-control font-medium text-[#55564f]">{scope.display_name}</p><p className="mt-0.5 text-micro text-[#aaa9a1]">{scope.last_sync_status === "ready" ? "已连接" : scope.last_sync_status === "failed" ? "同步失败" : "同步中"} · 手动确认同步</p></div><a href={scope.source_url} target="_blank" rel="noreferrer" className="text-caption text-[#65766e]">打开飞书 ↗</a><button type="button" onClick={() => void sync("knowledge", scope.id)} disabled={Boolean(busy)} className="h-7 rounded border border-[#deddd7] px-2 text-caption disabled:opacity-40">{busy === `sync:${scope.id}` ? "同步中…" : "立即同步"}</button></div>)}<div className="mt-2 flex gap-2"><input value={knowledgeUrl} onChange={(event) => setKnowledgeUrl(event.target.value)} disabled={Boolean(busy)} placeholder="粘贴飞书知识库地址" className="h-9 min-w-0 flex-1 rounded-md border border-[#deddd7] px-3 text-control outline-none" /><button type="button" onClick={() => void connect("knowledge")} disabled={!knowledgeUrl.trim() || Boolean(busy)} className="h-9 rounded-md bg-[#30342f] px-3 text-control text-white disabled:opacity-40">{busy === "connect:knowledge" || busy === "sync:knowledge" ? "连接中…" : "连接"}</button></div></section>
+        <section><h3 className="text-body font-semibold text-[#464741]">飞书云盘</h3><p className="mt-1 text-caption text-[#999890]">用于图片、视频和音频。</p>{data.driveScopes.map((scope) => <div key={scope.id} className="mt-2 flex items-center gap-2 rounded-md border border-[#e5e4df] px-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-control font-medium text-[#55564f]">{scope.display_name}</p><p className="mt-0.5 text-micro text-[#aaa9a1]">{scope.last_sync_status === "ready" ? "已连接" : scope.last_sync_status === "failed" ? "同步失败" : "同步中"} · 手动同步</p></div><a href={scope.source_url} target="_blank" rel="noreferrer" className="text-caption text-[#65766e]">打开飞书 ↗</a><button type="button" onClick={() => void sync("drive", scope.id)} disabled={Boolean(busy)} className="h-7 rounded border border-[#deddd7] px-2 text-caption disabled:opacity-40">{busy === `sync:${scope.id}` ? "同步中…" : "立即同步"}</button></div>)}<div className="mt-2 flex gap-2"><input value={driveUrl} onChange={(event) => setDriveUrl(event.target.value)} disabled={Boolean(busy)} placeholder="粘贴具体 /drive/folder/… 地址" className="h-9 min-w-0 flex-1 rounded-md border border-[#deddd7] px-3 text-control outline-none" /><button type="button" onClick={() => void connect("drive")} disabled={!driveUrl.trim() || Boolean(busy)} className="h-9 rounded-md bg-[#30342f] px-3 text-control text-white disabled:opacity-40">{busy === "connect:drive" || busy === "sync:drive" ? "连接中…" : "连接"}</button></div></section>
         {error && <p role="alert" className="rounded-md bg-[#fbf3ef] px-3 py-2 text-caption text-[#955c4c]">{error}</p>}
       </div>
       <footer className="flex justify-end border-t border-[#ebeae5] px-5 py-3"><button type="button" onClick={onClose} disabled={Boolean(busy)} className="h-8 rounded-md border border-[#deddd7] px-3 text-control">完成</button></footer>
@@ -226,6 +240,8 @@ export function ProjectMaterialsPanel({ projectId, onNotice }: { projectId: stri
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmingChanges, setConfirmingChanges] = useState(false);
+  const [changeError, setChangeError] = useState<string>();
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -248,6 +264,34 @@ export function ProjectMaterialsPanel({ projectId, onNotice }: { projectId: stri
     return () => { cancelled = true; window.removeEventListener("sugar:materials-changed", refresh); };
   }, [load]);
 
+  const confirmFeishuChanges = async () => {
+    if (!projectId || confirmingChanges) return;
+    setConfirmingChanges(true);
+    setChangeError(undefined);
+    try {
+      const response = await fetch("/api/projects/materials/feishu-changes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        synced?: number; unchanged?: number; failed?: number; indexed?: number; indexFailed?: number; error?: string;
+      } | null;
+      if (!response.ok || !payload) throw new Error(payload?.error || "飞书资料同步失败，请稍后重试。");
+      if ((payload.failed ?? 0) > 0) throw new Error(`有 ${payload.failed} 份飞书材料同步失败，请检查连接权限后重试。`);
+      await load();
+      const updated = payload.synced ?? 0;
+      const unchanged = payload.unchanged ?? 0;
+      const indexWarning = (payload.indexFailed ?? 0) > 0 ? `，${payload.indexFailed} 份材料的检索索引暂未更新` : "";
+      onNotice(`飞书变化已确认：更新 ${updated} 项，未变化 ${unchanged} 项${indexWarning}`);
+    } catch (value) {
+      setChangeError(value instanceof Error ? value.message : "飞书资料同步失败，请稍后重试。");
+      await load().catch(() => undefined);
+    } finally {
+      setConfirmingChanges(false);
+    }
+  };
+
   const directories = useMemo(() => {
     if (!data) return { knowledge: [] as Array<{ scope: KnowledgeScope; nodes: TreeNode[] }>, drive: [] as Array<{ scope: DriveScope; nodes: TreeNode[] }> };
     return {
@@ -263,6 +307,15 @@ export function ProjectMaterialsPanel({ projectId, onNotice }: { projectId: stri
 
   return <div className="mx-auto w-full max-w-[1120px]">
     <div className="flex items-start gap-4"><div className="min-w-0 flex-1"><h2 className="text-section-title font-semibold text-[#2e2f2b]">项目材料</h2><p className="mt-2 max-w-[900px] text-control leading-[1.75] text-[#7d7e77]">当前项目的工作空间中，Agent可使用的资料如下，已与飞书连接，请勿轻易修改连接设置，谢谢！<br />飞书知识库中是文档（DOCX、PDF、XLSX等），飞书云盘中是媒体文件（图片、视频、音频）。您与Agent对话中上传的资料，或新产生的成果，也会同步上传至飞书（上传前会获取您的确认）。</p></div><button type="button" onClick={() => setSettingsOpen(true)} className="h-8 shrink-0 rounded-md border border-[#deddd7] px-3 text-control text-[#62635d] hover:bg-[#f5f5f2]">连接设置</button></div>
+    {data.pendingFeishuChanges?.documentCount > 0 && <section className="mt-5 rounded-[9px] border border-[#d9e1db] bg-[#f6f9f7] px-4 py-3" aria-label="待确认的飞书变化">
+      <div className="flex items-center gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-[#4d735f] shadow-[inset_0_0_0_1px_#d9e1db]">↻</span>
+        <div className="min-w-0 flex-1"><p className="text-body font-semibold text-[#3f5148]">飞书中有 {data.pendingFeishuChanges.documentCount} 份材料发生变化</p><p className="mt-0.5 text-caption text-[#748078]">确认后才会同步最新内容，并更新 Agent 可检索的资料。</p></div>
+        <button type="button" onClick={() => void confirmFeishuChanges()} disabled={confirmingChanges} className="h-9 shrink-0 rounded-md bg-[#355f4d] px-4 text-control font-medium text-white hover:bg-[#2d5141] disabled:cursor-wait disabled:opacity-60">{confirmingChanges ? "正在同步…" : "确认同步"}</button>
+      </div>
+      <details className="mt-2 border-t border-[#e1e8e3] pt-2"><summary className="w-fit cursor-pointer text-caption text-[#60766a]">查看变化</summary><div className="mt-2 space-y-1.5">{data.pendingFeishuChanges.documents.map((document) => <div key={document.id} className="flex items-center gap-3 text-caption"><span className="min-w-0 flex-1 truncate text-[#626b65]">{document.sourceUrl ? <a href={document.sourceUrl} target="_blank" rel="noreferrer" className="hover:underline">{document.title}</a> : document.title}</span><span className="shrink-0 text-[#9a9f9b]">修改于 {dateLabel(document.latestEventAt)}</span></div>)}</div></details>
+      {changeError && <p role="alert" className="mt-2 text-caption text-[#955c4c]">{changeError}</p>}
+    </section>}
     <div className="mt-5 flex items-center gap-3 border-b border-[#e8e7e2] pb-3"><div className="relative min-w-0 flex-1"><span className="pointer-events-none absolute left-3 top-2 text-control text-[#aaa9a1]">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索材料名称或内容" className="h-8 w-full rounded-md border border-[#e0dfda] bg-white pl-8 pr-3 text-control outline-none focus:border-[#aab2ac]" /></div><span className="shrink-0 text-micro text-[#aaa9a1]">{connected ? `已与飞书同步 · ${relativeSync(data.lastSyncedAt)}` : "尚未连接飞书"}</span></div>
     <section className="mt-4 overflow-hidden rounded-[9px] border border-[#e3e2dc] bg-white">
       <header className="border-b border-[#ebeae5] bg-[#fafaf8] px-4 py-3 text-control font-semibold text-[#5a5b55]">项目材料目录</header>

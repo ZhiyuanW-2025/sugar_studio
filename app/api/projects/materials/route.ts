@@ -1,5 +1,6 @@
 import { isUuid } from "../../../../lib/model-config/http";
 import { ProjectAccessError, requireProjectMember } from "../../../../lib/projects/access";
+import { getPendingProjectFeishuChanges } from "../../../../lib/feishu/event-service";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
@@ -12,6 +13,13 @@ export async function GET(request: Request) {
 
   try {
     const { supabase } = await requireProjectMember(projectId);
+    const pendingChangesPromise = getPendingProjectFeishuChanges(projectId).catch(() => ({
+      eventCount: 0,
+      documentCount: 0,
+      latestEventAt: null,
+      scopeIds: [],
+      documents: [],
+    }));
     const [knowledgeScopesResult, driveScopesResult] = await Promise.all([
       supabase.from("feishu_sync_scopes")
         .select("id,root_node_token,source_url,display_name,last_incremental_sync_at,last_full_sync_at,last_sync_status,last_sync_error,sync_frequency")
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
 
     return Response.json({
       lastSyncedAt,
+      pendingFeishuChanges: await pendingChangesPromise,
       knowledgeScopes,
       driveScopes,
       knowledgeItems: wikiRows.map((item) => ({
