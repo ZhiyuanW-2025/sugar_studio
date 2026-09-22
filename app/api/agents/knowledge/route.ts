@@ -1,4 +1,6 @@
 import { getAgentDefinition } from "../../../../lib/agents/catalog";
+import { applyFeishuChangeProposal, createFeishuChangeProposal } from "../../../../lib/feishu/proposal-service";
+import { indexKnowledgeDocument } from "../../../../lib/knowledge/service";
 import { requireWorkspaceMember, WorkspaceAccessError } from "../../../../lib/workspace/access";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +35,21 @@ export async function POST(request: Request) {
     const { supabase, user } = await requireWorkspaceMember();
     const { data: agentRow } = await supabase.from("agents").select("id").eq("agent_type", agent.type).maybeSingle();
     if (!agentRow) return responseError("没有找到该 Agent。", 404);
+    if (!body?.id && body?.syncToFeishu === true) {
+      const proposal = await createFeishuChangeProposal({
+        requestedBy: user.id,
+        projectId: null,
+        agentType: agent.type,
+        action: "create_document",
+        documentTitle: `${agent.name} · ${title}`,
+        changeSummary: `新增${agent.name}的通用工作知识`,
+        content,
+      });
+      const applied = await applyFeishuChangeProposal({ proposalId: proposal.id, appliedBy: user.id });
+      if (applied.synced?.documentId) {
+        await indexKnowledgeDocument({ supabase, userId: user.id, documentId: applied.synced.documentId }).catch(() => undefined);
+      }
+    }
     const values = { agent_id: agentRow.id, title, content, status, created_by: user.id };
     const query = typeof body?.id === "string"
       ? supabase.from("agent_general_knowledge").update(values).eq("id", body.id)
