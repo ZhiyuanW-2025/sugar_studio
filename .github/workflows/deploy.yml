@@ -1,0 +1,60 @@
+name: Deploy Website to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    container:
+      image: ci-node-rsync:22
+
+    steps:
+      - name: Checkout code
+        uses: https://${{ secrets.ACTION_USER }}:${{ secrets.ACTION_PASS }}@github.fdcity.cn/actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: https://${{ secrets.ACTION_USER }}:${{ secrets.ACTION_PASS }}@github.fdcity.cn/actions/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # 只同步源码。NEXT_PUBLIC_* 必须在有 .env.local 的机器上打包，CI 里打的 client 不能用。
+      # 不要 --delete 项目根目录；只排除运行时文件，避免覆盖 .env.local / node_modules。
+      - name: Deploy source to server
+        run: |
+          rsync -avz --delete \
+            --exclude '.git/' \
+            --exclude '.env.local' \
+            --exclude 'node_modules/' \
+            --exclude 'dist/' \
+            --exclude '.wrangler/' \
+            --exclude '.vinext/' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/sugar_studio/"
+
+      - name: Build and reload application
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << EOF
+            set -e
+            export NVM_DIR="\$HOME/.nvm"
+            [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+            nvm use 22
+
+            cd /var/www/sugar_studio
+            npm ci
+            npm run build
+
+            if pm2 describe sugar-studio >/dev/null 2>&1; then
+              pm2 reload sugar-studio
+            else
+              PORT=1428 VINEXT_TRUST_PROXY=1 VINEXT_TRUSTED_HOSTS=agent.fdcity.cn \
+                pm2 start "\$(command -v npm)" \
+                --name sugar-studio \
+                --cwd /var/www/sugar_studio \
+                --interpreter "\$(command -v node)" \
+                -- start
+              pm2 save
+            fi
+          EOF
