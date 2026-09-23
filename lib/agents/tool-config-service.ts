@@ -20,16 +20,16 @@ function slugify(value: string) {
 
 function builtInTools(agent: AgentDefinition): AgentToolConfig[] {
   return agent.tools.map((tool) => {
-    const slug = slugify(tool.label.split(" · ")[0]);
+    const slug = tool.slug ?? slugify(tool.label.split(" · ")[0]);
     return {
       id: null,
       slug,
       name: tool.label,
-      description: tool.status === "enabled" ? `为${agent.name}提供“${tool.label}”能力。` : `该能力目前未接入${agent.name}。`,
-      implementation: tool.status === "enabled"
+      description: tool.description ?? (tool.status === "enabled" ? `为${agent.name}提供“${tool.label}”能力。` : `该能力目前未接入${agent.name}。`),
+      implementation: tool.implementation ?? (tool.status === "enabled"
         ? `服务端工具：${slug}。实际执行由 Sugar Agent 服务端代码负责；此处可编辑工具说明、输入结构和使用边界。`
-        : "当前尚未接入可执行实现，仅作为预留工具定义。",
-      inputSchema: {},
+        : "当前尚未接入可执行实现，仅作为预留工具定义。"),
+      inputSchema: tool.inputSchema ?? {},
       status: tool.status === "enabled" ? "enabled" : "disabled",
       isBuiltin: true,
     };
@@ -90,7 +90,7 @@ export async function resolveActiveAgentGeneralKnowledge(supabase: SupabaseClien
       .eq("id", agent.general_feishu_scope_id).eq("enabled", true).maybeSingle();
     if (scope) items.push({
       title: `已连接的飞书通用知识库：${scope.display_name}`,
-      content: `这是该 Agent 的全局工作知识来源，当前状态为${scope.last_sync_status === "ready" ? "已同步" : "待同步或同步中"}。需要查找其中的规范、模板和工作方法时，使用 search_project_knowledge 检索公司知识；不要把飞书地址或同步状态当作项目事实。来源地址：${scope.source_url}`,
+      content: `这是该 Agent 专属的全局工作知识来源，当前状态为${scope.last_sync_status === "ready" ? "已同步" : "待同步或同步中"}。需要查找其中的规范、模板和工作方法时，必须使用 search_agent_general_knowledge；不要使用 search_project_knowledge 代替，也不要把飞书地址或同步状态当作项目事实。来源地址：${scope.source_url}`,
     });
   }
   return items;

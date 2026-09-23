@@ -1,6 +1,7 @@
 import { isMarketingPlatform } from "../../../lib/marketing/types";
 import { isUuid } from "../../../lib/model-config/http";
 import { ProjectAccessError, requireProjectMember } from "../../../lib/projects/access";
+import { createAdminClient } from "../../../lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
@@ -24,6 +25,10 @@ function serialize(item: Record<string, unknown>) {
     status: item.status,
     createdAt: item.created_at,
     updatedAt: item.updated_at,
+    publishAccount: item.publish_account ?? "",
+    scheduledAt: item.scheduled_at ?? null,
+    completedAt: item.completed_at ?? null,
+    images: Array.isArray(item.images) ? item.images : [],
   };
 }
 
@@ -33,10 +38,20 @@ export async function GET(request: Request) {
   try {
     const { supabase } = await requireProjectMember(projectId);
     const { data, error } = await supabase.from("marketing_contents")
-      .select("id,project_id,platform,title,summary,content,cover_copy,tags,image_plan,status,created_at,updated_at")
+      .select("id,project_id,platform,title,summary,content,cover_copy,tags,image_plan,status,publish_account,scheduled_at,completed_at,created_at,updated_at")
       .eq("project_id", projectId).neq("status", "archived").order("updated_at", { ascending: false });
     if (error) return Response.json({ error: "暂时无法加载营销内容。" }, { status: 500, headers });
-    return Response.json({ contents: (data ?? []).map((item) => serialize(item)) }, { headers });
+    const ids = (data ?? []).map((item) => item.id);
+    const { data: images } = ids.length ? await supabase.from("marketing_content_images").select("id,marketing_content_id,image_generation_id,storage_path,file_name,mime_type,source,is_official,created_at").in("marketing_content_id", ids).order("created_at", { ascending: false }) : { data: [] };
+    const generationIds = (images ?? []).map((image) => image.image_generation_id).filter((id): id is string => typeof id === "string");
+    const { data: generations } = generationIds.length ? await createAdminClient().from("image_generations").select("id,storage_path").in("id", generationIds) : { data: [] };
+    const generationPath = new Map((generations ?? []).map((item) => [item.id, item.storage_path]));
+    const imageRows = (images ?? []).map((image) => ({ ...image, storage_path: image.storage_path ?? (image.image_generation_id ? generationPath.get(image.image_generation_id) ?? null : null) }));
+    const paths = imageRows.map((image) => image.storage_path).filter((path): path is string => typeof path === "string");
+    const signed = paths.length ? await createAdminClient().storage.from("agent-images").createSignedUrls(paths, 3600) : { data: [] };
+    const signedByPath = new Map((signed.data ?? []).map((item) => [item.path, item.signedUrl]));
+    const contents = (data ?? []).map((item) => serialize({ ...item, images: imageRows.filter((image) => image.marketing_content_id === item.id).map((image) => ({ id: image.id, imageGenerationId: image.image_generation_id, fileName: image.file_name, mimeType: image.mime_type, source: image.source, isOfficial: image.is_official, storagePath: image.storage_path, imageUrl: image.storage_path ? signedByPath.get(image.storage_path) ?? null : null, createdAt: image.created_at })) }));
+    return Response.json({ contents }, { headers });
   } catch (error) { return accessError(error); }
 }
 
@@ -62,7 +77,9 @@ export async function POST(request: Request) {
       tags: Array.isArray(body?.tags) ? body.tags.filter((item: unknown) => typeof item === "string").slice(0, 30) : [],
       created_by: user.id,
       updated_by: user.id,
-    }).select("id,project_id,platform,title,summary,content,cover_copy,tags,image_plan,status,created_at,updated_at").single();
+      publish_account: typeof body?.publishAccount === "string" ? body.publishAccount.trim().slice(0, 200) : "",
+      scheduled_at: typeof body?.scheduledAt === "string" && body.scheduledAt ? body.scheduledAt : null,
+    }).select("id,project_id,platform,title,summary,content,cover_copy,tags,image_plan,status,publish_account,scheduled_at,completed_at,created_at,updated_at").single();
     if (error || !data) return Response.json({ error: "营销草稿保存失败。" }, { status: 500, headers });
     return Response.json({ created: true, content: serialize(data) }, { status: 201, headers });
   } catch (error) { return accessError(error); }
