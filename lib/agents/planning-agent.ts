@@ -238,10 +238,27 @@ export async function runSugarAgent({
   } finally {
     // Workerd does not run the SDK's automatic export loop. Flush completed
     // spans before the request can end, including traces for failed Agent runs.
+    // Telemetry is best-effort: an exporter/network failure must never turn an
+    // otherwise successful Agent response into a user-facing 502.
     try {
       await getGlobalTraceProvider().forceFlush();
-    } finally {
+    } catch (error) {
+      const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      console.error("[agent tracing] forceFlush failed", {
+        name: error instanceof Error ? error.name : "UnknownError",
+        status: typeof details.status === "number" ? details.status : undefined,
+        code: typeof details.code === "string" ? details.code : undefined,
+      });
+    }
+    try {
       await provider.close();
+    } catch (error) {
+      const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      console.error("[agent provider] close failed", {
+        name: error instanceof Error ? error.name : "UnknownError",
+        status: typeof details.status === "number" ? details.status : undefined,
+        code: typeof details.code === "string" ? details.code : undefined,
+      });
     }
   }
 }
