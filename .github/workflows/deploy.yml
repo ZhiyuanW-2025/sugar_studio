@@ -57,4 +57,9 @@ jobs:
                 -- start
               pm2 save
             fi
+
+            # Keep production diagnosis inside the private CI log. The app's
+            # Agent error logger is deliberately sanitized and never includes
+            # API keys, request headers, Vault values or model secrets.
+            pm2 logs sugar-studio --err --lines 160 --nostream || true
           EOF
