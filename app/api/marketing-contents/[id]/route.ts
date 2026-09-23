@@ -33,8 +33,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (body?.status !== undefined) {
     if (!isMarketingStatus(body.status)) return Response.json({ error: "状态参数无效。" }, { status: 400, headers });
     updates.status = body.status;
+    if (body.status === "completed") updates.completed_at = new Date().toISOString();
   }
   if (typeof body?.summary === "string") updates.summary = body.summary.trim().slice(0, 2000);
+  if (typeof body?.publishAccount === "string") updates.publish_account = body.publishAccount.trim().slice(0, 200);
+  if (body?.scheduledAt === null || typeof body?.scheduledAt === "string") updates.scheduled_at = body.scheduledAt || null;
   if (typeof body?.coverCopy === "string") updates.cover_copy = body.coverCopy.trim().slice(0, 1000);
   if (typeof body?.imagePlan === "string") updates.image_plan = body.imagePlan.trim().slice(0, 20_000);
   if (Array.isArray(body?.tags)) updates.tags = body.tags.filter((item: unknown) => typeof item === "string").slice(0, 30);

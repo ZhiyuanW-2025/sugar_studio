@@ -43,6 +43,7 @@ type AgentWorkspaceProps = {
   agentStartedAt: Partial<Record<AgentId, number>>;
   composerValue: string;
   onComposerValueChange: (agentId: AgentId, value: string) => void;
+  onMarketingWorkChange?: (workId: string | null) => void;
 };
 
 const statusMeta: Record<AgentWorkStatus, { label: string; dot: string }> = {
@@ -82,6 +83,7 @@ export function AgentWorkspace({
   agentStartedAt,
   composerValue,
   onComposerValueChange,
+  onMarketingWorkChange,
 }: AgentWorkspaceProps) {
   const getStatus = (agentId: AgentId): AgentWorkStatus => {
     if (agentErrors[agentId]) return "error";
@@ -171,10 +173,8 @@ export function AgentWorkspace({
               <MarketingContentPanel
                 projectId={projectId}
                 disabled={generatingAgents.marketing === true || loadingAgents.marketing === true || !projectId}
-                latestMessage={[...messages.marketing].reverse().find((message) => message.role === "agent")}
-                onCreateDraft={(message) => { void onSendMessage("marketing", message); }}
-                onHandoffToDesigner={(content) => onReturnHandoff("marketing", "designer", content)}
                 onNotice={onNotice}
+                onActiveWorkChange={onMarketingWorkChange}
               />
             </div>
           )}

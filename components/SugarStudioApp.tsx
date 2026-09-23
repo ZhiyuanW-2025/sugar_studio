@@ -210,6 +210,7 @@ export function SugarStudioApp({ currentUser, initialProjects, hasModelConfig }:
   const [loadingAgents, setLoadingAgents] = useState<Partial<Record<AgentId, boolean>>>({ planner: true });
   const [conversationIds, setConversationIds] = useState<Partial<Record<AgentId, string>>>({});
   const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>({});
+  const [marketingWorkIds, setMarketingWorkIds] = useState<Record<string, string | null>>({});
   const [quickHandoff, setQuickHandoff] = useState<{ source: AgentId; target: AgentId; title: string; content: string } | null>(null);
   const [quickHandoffSending, setQuickHandoffSending] = useState(false);
   const [quickHandoffError, setQuickHandoffError] = useState<string>();
@@ -582,6 +583,7 @@ export function SugarStudioApp({ currentUser, initialProjects, hasModelConfig }:
           conversationId: conversationIds[agentId],
           requestId,
           message,
+          ...(agentId === "marketing" && marketingWorkIds[project.id] ? { marketingContentId: marketingWorkIds[project.id] } : {}),
           knowledgeAttachments: ingestedAttachments.map((item) => ({
             documentId: item.documentId,
             fileName: item.fileName,
@@ -606,6 +608,7 @@ export function SugarStudioApp({ currentUser, initialProjects, hasModelConfig }:
         ],
       }));
       if (payload.conversationId) setConversationIds((current) => ({ ...current, [agentId]: payload.conversationId! }));
+      if (agentId === "marketing") window.dispatchEvent(new Event("sugar:marketing-contents-changed"));
       if (agentId === "planner") setSaved(false);
       if (activeAgentRef.current !== agentId || sectionRef.current !== "workspace") {
         setCompletedAgents((current) => ({ ...current, [agentId]: true }));
@@ -832,6 +835,7 @@ export function SugarStudioApp({ currentUser, initialProjects, hasModelConfig }:
             agentStartedAt={agentStartedAt}
             composerValue={activeAgent ? composerDrafts[composerDraftKey(project.id, activeAgent)] ?? "" : ""}
             onComposerValueChange={handleComposerValueChange}
+            onMarketingWorkChange={(workId) => setMarketingWorkIds((current) => ({ ...current, [project.id]: workId }))}
           />
         ) : (
           <ProjectSectionView key={`${project.id}:${project.description}:${project.currentStage}`} section={section} project={project} onNotice={showNotice} onProjectUpdated={handleProjectUpdated} />

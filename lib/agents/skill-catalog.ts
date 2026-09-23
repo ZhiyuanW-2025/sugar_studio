@@ -5,6 +5,7 @@ export type AgentSkillToolOption = { value: string; label: string };
 const commonTools: AgentSkillToolOption[] = [
   { value: "get_project_context", label: "读取正式项目概况" },
   { value: "search_project_knowledge", label: "检索项目材料与知识" },
+  { value: "search_agent_general_knowledge", label: "检索 Agent 通用工作知识" },
 ];
 
 export const agentSkillToolOptions: Record<ModelAgentType, AgentSkillToolOption[]> = {
@@ -20,7 +21,7 @@ export const agentSkillToolOptions: Record<ModelAgentType, AgentSkillToolOption[
     { value: "get_procurement_inquiry_context", label: "读取厂家询价上下文" },
     { value: "send_procurement_follow_up", label: "向厂家发送后续询价" },
   ],
-  marketing: [...commonTools, { value: "manage_feishu_knowledge", label: "生成或执行飞书知识变更" }],
+  marketing: [...commonTools, { value: "update_marketing_content", label: "更新当前宣传作品" }, { value: "manage_feishu_knowledge", label: "生成或执行飞书知识变更" }],
 };
 
 export function validateAgentSkillTools(agentType: ModelAgentType, values: unknown) {

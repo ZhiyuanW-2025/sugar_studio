@@ -18,6 +18,7 @@ import type { StoredMessage } from "./thread-service";
 import { createGetProjectContextTool } from "./tools/get-project-context";
 import { createProposeFeishuKnowledgeChangeTool } from "./tools/propose-feishu-knowledge-change";
 import { createSearchProjectKnowledgeTool } from "./tools/search-project-knowledge";
+import { createSearchAgentGeneralKnowledgeTool } from "./tools/search-agent-general-knowledge";
 import { createSaveKnowledgeFileDescriptionsTool, type KnowledgeAttachmentContext } from "./tools/save-knowledge-file-descriptions";
 import { adaptiveResponseStyleInstructions } from "./response-style";
 
@@ -67,6 +68,7 @@ export type RunSugarAgentInput = {
   instructions: string;
   includeProjectContextTool?: boolean;
   includeKnowledgeTool?: boolean;
+  includeAgentGeneralKnowledgeTool?: boolean;
   includeFeishuWriteTool?: boolean;
   knowledgeAttachments?: KnowledgeAttachmentContext[];
   runtimeTools?: Tool[];
@@ -105,6 +107,7 @@ export async function runSugarAgent({
   instructions,
   includeProjectContextTool = true,
   includeKnowledgeTool = true,
+  includeAgentGeneralKnowledgeTool = true,
   includeFeishuWriteTool = true,
   maxTurns = 5,
   projectContext,
@@ -128,6 +131,7 @@ export async function runSugarAgent({
   });
   let projectContextCallCount = 0;
   let projectKnowledgeCallCount = 0;
+  let agentGeneralKnowledgeCallCount = 0;
   let feishuProposalCallCount = 0;
   const actionProposalIds: string[] = [];
   let knowledgeDescriptionCallCount = 0;
@@ -142,6 +146,14 @@ export async function runSugarAgent({
     apiKey,
     onExecute: () => {
       projectKnowledgeCallCount += 1;
+    },
+  });
+  const agentGeneralKnowledgeTool = createSearchAgentGeneralKnowledgeTool({
+    supabase: projectContext.supabase,
+    agentType,
+    apiKey,
+    onExecute: () => {
+      agentGeneralKnowledgeCallCount += 1;
     },
   });
   const feishuProposalTool = createProposeFeishuKnowledgeChangeTool({
@@ -164,6 +176,7 @@ export async function runSugarAgent({
   const tools = [
     ...(includeProjectContextTool ? [projectContextTool] : []),
     ...(includeKnowledgeTool ? [projectKnowledgeTool] : []),
+    ...(includeAgentGeneralKnowledgeTool ? [agentGeneralKnowledgeTool] : []),
     ...(includeFeishuWriteTool ? [feishuProposalTool] : []),
     ...(knowledgeDescriptionTool ? [knowledgeDescriptionTool] : []),
     ...runtimeTools,
@@ -214,6 +227,7 @@ export async function runSugarAgent({
       toolCalls: [
         ...Array.from({ length: projectContextCallCount }, () => "get_project_context"),
         ...Array.from({ length: projectKnowledgeCallCount }, () => "search_project_knowledge"),
+        ...Array.from({ length: agentGeneralKnowledgeCallCount }, () => "search_agent_general_knowledge"),
         ...Array.from({ length: feishuProposalCallCount }, () => "manage_feishu_knowledge"),
         ...Array.from({ length: knowledgeDescriptionCallCount }, () => "save_knowledge_file_descriptions"),
         ...(collectAdditionalToolCalls?.() ?? []),

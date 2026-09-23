@@ -30,7 +30,38 @@ export async function GET(request: Request) {
       .eq("enabled", true)
       .maybeSingle();
     if (scopeError) return errorResponse("暂时无法读取 Agent 飞书知识库连接。", 500);
-    return Response.json({ scope: scope ?? null }, { headers });
+    if (!scope) return Response.json({ scope: null, documents: [] }, { headers });
+    const { data: sourceDocuments, error: sourceError } = await supabase.from("feishu_knowledge_documents")
+      .select("id,title,obj_type,source_url,external_updated_at,last_synced_at,sync_status,company_file_id")
+      .eq("sync_scope_id", scope.id)
+      .neq("sync_status", "removed")
+      .order("title", { ascending: true });
+    if (sourceError) return errorResponse("暂时无法读取 Agent 飞书知识库文件。", 500);
+    const fileIds = (sourceDocuments ?? []).map((document) => document.company_file_id).filter((id): id is string => Boolean(id));
+    const { data: indexedDocuments, error: indexError } = fileIds.length > 0
+      ? await supabase.from("knowledge_documents").select("id,company_file_id,status,indexed_at,error_message").in("company_file_id", fileIds)
+      : { data: [], error: null };
+    if (indexError) return errorResponse("暂时无法读取 Agent 知识解析状态。", 500);
+    const indexByFile = new Map((indexedDocuments ?? []).map((document) => [document.company_file_id, document]));
+    return Response.json({
+      scope,
+      documents: (sourceDocuments ?? []).map((document) => {
+        const indexed = document.company_file_id ? indexByFile.get(document.company_file_id) : null;
+        return {
+          id: document.id,
+          title: document.title,
+          objType: document.obj_type,
+          sourceUrl: document.source_url,
+          externalUpdatedAt: document.external_updated_at,
+          lastSyncedAt: document.last_synced_at,
+          syncStatus: document.sync_status,
+          documentId: indexed?.id ?? null,
+          indexStatus: indexed?.status ?? (document.sync_status === "unsupported" ? "unsupported" : "pending"),
+          indexedAt: indexed?.indexed_at ?? null,
+          indexError: indexed?.error_message ?? null,
+        };
+      }),
+    }, { headers });
   } catch (error) {
     return accessError(error);
   }
