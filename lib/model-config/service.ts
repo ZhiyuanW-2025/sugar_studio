@@ -123,3 +123,21 @@ export async function resolveModelConfig(
     apiKey: row.api_key,
   };
 }
+
+/** Resolve one explicit user-owned model configuration for an Agent test. */
+export async function resolveModelConfigById(
+  userId: string,
+  configId: string,
+): Promise<{ provider: ModelProvider; model: string; apiKey: string }> {
+  const { data, error } = await createAdminClient()
+    .rpc("resolve_user_model_config_by_id", {
+      p_user_id: userId,
+      p_config_id: configId,
+    })
+    .maybeSingle();
+  if (error) throw serviceError("resolve by id");
+
+  const row = data as ResolvedModelRow | null;
+  if (!row) throw new Error("Selected model configuration is unavailable.");
+  return { provider: row.provider, model: row.model, apiKey: row.api_key };
+}

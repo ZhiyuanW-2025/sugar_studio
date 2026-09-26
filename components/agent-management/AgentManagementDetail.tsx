@@ -204,7 +204,7 @@ export function AgentManagementDetail({ agent, projects }: Props) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[920px] px-8 py-10">
+    <div className={`mx-auto w-full px-8 py-10 ${tab === "test" ? "max-w-[1480px]" : "max-w-[920px]"}`}>
       <div className="flex items-start gap-4">
         <AgentAvatar agentType={agent.type} initials={agent.initials} className="grid h-12 w-12 shrink-0 place-items-center rounded-[10px] border border-[#dfded8] bg-[#f7f7f4] text-body font-semibold text-[#55554f]" />
         <div>
