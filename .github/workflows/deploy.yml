@@ -58,7 +58,7 @@ jobs:
             if pm2 describe sugar-studio >/dev/null 2>&1; then
               pm2 reload sugar-studio
             else
-              PORT=1428 VINEXT_TRUST_PROXY=1 VINEXT_TRUSTED_HOSTS=agent.fdcity.cn \
+              PORT=1428 VINEXT_TRUST_PROXY=1 VINEXT_TRUSTED_HOSTS=agent.shuge.work \
                 pm2 start "\$(command -v npm)" \
                 --name sugar-studio \
                 --cwd /var/www/sugar_studio \
