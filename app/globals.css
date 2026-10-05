@@ -331,22 +331,6 @@ button[aria-busy="true"] {
   display: none;
 }
 
-/* Agent tabs remain horizontally scrollable when many are open, but the
-   browser must never draw its native scrollbar as a dark underline. */
-.agent-tab-strip {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.agent-tab-strip::-webkit-scrollbar,
-.agent-tab-strip::-webkit-scrollbar-track,
-.agent-tab-strip::-webkit-scrollbar-thumb {
-  display: none;
-  width: 0;
-  height: 0;
-  background: transparent;
-}
-
 @keyframes panel-in {
   from {
     opacity: 0;

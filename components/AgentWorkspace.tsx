@@ -95,31 +95,29 @@ export function AgentWorkspace({
   return (
     <main className="flex min-h-0 flex-1 flex-col bg-[#f8f8f5]">
       <div className="flex h-[44px] shrink-0 items-end border-b border-[#dfded9] bg-[#efefec] px-3 pt-1.5">
-        <div className="h-[36px] min-w-0 flex-1 overflow-hidden">
-          <div className="agent-tab-strip flex h-[52px] min-w-0 items-start gap-1 overflow-x-auto overflow-y-hidden">
-            {openAgents.map((agentId) => {
-              const meta = agentMeta[agentId];
-              const status = getStatus(agentId);
-              const statusDescription = agentProgress[agentId] || agentErrors[agentId] || statusMeta[status].label;
-              const selected = activeAgent === agentId;
-              return (
-                <div
-                  key={agentId}
-                  className={`group flex h-[36px] min-w-[150px] max-w-[210px] items-center rounded-t-[8px] border border-b-0 px-2.5 ${selected ? "border-[#dfded9] bg-white text-[#34342f]" : "border-transparent bg-[#e8e8e4] text-[#6f6e67] hover:bg-[#e3e3df]"}`}
-                >
-                  <button type="button" onClick={() => onActivateAgent(agentId)} className="flex min-w-0 flex-1 items-center gap-2 rounded-[5px] text-left outline-none focus:outline-none focus-visible:bg-[#f1f3ef] focus-visible:outline-none">
-                    <AgentAvatar agentId={agentId} initials={meta.initials} className="grid h-5 w-5 shrink-0 place-items-center rounded-[5px] bg-white/80 text-micro font-semibold text-[#55554f] ring-1 ring-black/[0.05]" />
-                    <span className="truncate text-control font-medium">{meta.name}</span>
-                  </button>
-                  <span className="relative ml-2 flex shrink-0 items-center">
-                    <span aria-label={statusDescription} title={statusDescription} className={`h-2 w-2 rounded-full ring-2 ring-white/80 ${statusMeta[status].dot}`} />
-                    <span className="pointer-events-none absolute right-0 top-5 z-30 hidden w-max max-w-[240px] rounded-md bg-[#282824] px-2 py-1.5 text-caption leading-4 text-white shadow-lg group-hover:block">{statusDescription}</span>
-                  </span>
-                  <button type="button" aria-label={`关闭 ${meta.name}`} title="关闭标签（不会删除对话或中断工作）" onClick={() => onCloseAgent(agentId)} className="ml-1.5 grid h-5 w-5 shrink-0 place-items-center rounded text-body text-[#aaa9a1] hover:bg-black/[0.06] hover:text-[#55554f]">×</button>
-                </div>
-              );
-            })}
-          </div>
+        <div className="flex h-[36px] min-w-0 flex-1 items-start gap-1 overflow-hidden">
+          {openAgents.map((agentId) => {
+            const meta = agentMeta[agentId];
+            const status = getStatus(agentId);
+            const statusDescription = agentProgress[agentId] || agentErrors[agentId] || statusMeta[status].label;
+            const selected = activeAgent === agentId;
+            return (
+              <div
+                key={agentId}
+                className={`group flex h-[36px] min-w-0 max-w-[210px] flex-1 basis-[150px] items-center rounded-t-[8px] border border-b-0 px-2.5 ${selected ? "border-[#dfded9] bg-white text-[#34342f]" : "border-transparent bg-[#e8e8e4] text-[#6f6e67] hover:bg-[#e3e3df]"}`}
+              >
+                <button type="button" onClick={() => onActivateAgent(agentId)} className="flex min-w-0 flex-1 items-center gap-2 rounded-[5px] text-left outline-none focus:outline-none focus-visible:bg-[#f1f3ef] focus-visible:outline-none">
+                  <AgentAvatar agentId={agentId} initials={meta.initials} className="grid h-5 w-5 shrink-0 place-items-center rounded-[5px] bg-white/80 text-micro font-semibold text-[#55554f] ring-1 ring-black/[0.05]" />
+                  <span className="truncate text-control font-medium">{meta.name}</span>
+                </button>
+                <span className="relative ml-2 flex shrink-0 items-center">
+                  <span aria-label={statusDescription} title={statusDescription} className={`h-2 w-2 rounded-full ring-2 ring-white/80 ${statusMeta[status].dot}`} />
+                  <span className="pointer-events-none absolute right-0 top-5 z-30 hidden w-max max-w-[240px] rounded-md bg-[#282824] px-2 py-1.5 text-caption leading-4 text-white shadow-lg group-hover:block">{statusDescription}</span>
+                </span>
+                <button type="button" aria-label={`关闭 ${meta.name}`} title="关闭标签（不会删除对话或中断工作）" onClick={() => onCloseAgent(agentId)} className="ml-1.5 grid h-5 w-5 shrink-0 place-items-center rounded text-body text-[#aaa9a1] hover:bg-black/[0.06] hover:text-[#55554f]">×</button>
+              </div>
+            );
+          })}
         </div>
         <button type="button" onClick={onAddAgent} className="mb-1 ml-1 flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-control font-medium text-[#68675f] hover:bg-white/70">
           <span className="text-section-title">＋</span> 添加 Agent
