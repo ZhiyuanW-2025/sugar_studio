@@ -469,15 +469,17 @@ export class NewtonClient {
         });
         const payload = await response.json().catch(() => null) as NewtonResponse | null;
         const nestedResult = asObject(payload?.result);
-        const code = textValue(payload?.errorCode ?? payload?.code ?? nestedResult?.errorCode ?? nestedResult?.error);
+        const code = textValue(payload?.errorCode ?? payload?.code ?? nestedResult?.errorCode ?? nestedResult?.code);
         const traceId = textValue(payload?.eagleTraceId ?? payload?.traceId ?? nestedResult?.eagleTraceId);
         const providerMessage = sanitizeProviderMessage(
           payload?.errorMessage
             ?? payload?.errorMsg
             ?? payload?.message
+            ?? payload?.error
             ?? nestedResult?.errorMessage
             ?? nestedResult?.errorMsg
-            ?? nestedResult?.message,
+            ?? nestedResult?.message
+            ?? nestedResult?.error,
           [this.appKey, this.appSecret, this.accessToken],
         );
         const rateLimited = response.status === 429 || Boolean(code?.startsWith("RATE_LIMIT_"));

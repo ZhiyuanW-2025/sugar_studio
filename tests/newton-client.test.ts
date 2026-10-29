@@ -113,6 +113,31 @@ test("preserves safe 1688 diagnostics and redacts credentials from provider mess
   }
 });
 
+test("reads the top-level 1688 error field as a provider explanation", async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const client = new NewtonClient({
+      ...credentials,
+      fetchImpl: async () => Response.json({
+        success: false,
+        error: "积分不足，请登录 Newton 客户端领取",
+        eagleTraceId: "trace-1688-points",
+      }),
+    });
+    await assert.rejects(() => client.createProcurementTask("找礼品袋"), (error: unknown) => {
+      assert.ok(error instanceof NewtonApiError);
+      assert.equal(error.code, null);
+      assert.equal(error.traceId, "trace-1688-points");
+      assert.equal(error.providerMessage, "积分不足，请登录 Newton 客户端领取");
+      assert.match(error.message, /积分不足/);
+      return true;
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
 test("unwraps Newton errors from the Agent SDK error property", () => {
   const inner = new NewtonApiError("1688 找品服务请求失败。", {
     code: "WORKFLOW_DENIED",
