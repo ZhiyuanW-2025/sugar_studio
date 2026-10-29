@@ -43,11 +43,15 @@ type Options = {
   errorLabel: string;
   fallbackInstructions: string;
   run: (input: RunnerInput) => Promise<AgentRunResult>;
-  mapRunError?: (error: unknown) => { message: string; status: number } | undefined;
+  mapRunError?: (error: unknown) => {
+    message: string;
+    status: number;
+    details?: Record<string, unknown>;
+  } | undefined;
 };
 
-const errorResponse = (error: string, status: number) =>
-  Response.json({ error }, { status, headers: responseHeaders });
+const errorResponse = (error: string, status: number, details?: Record<string, unknown>) =>
+  Response.json({ error, ...details }, { status, headers: responseHeaders });
 
 async function authorizeProject(projectId: string, label: string) {
   const supabase = await createClient();
@@ -267,7 +271,7 @@ export function createAgentMessageHandlers(options: Options) {
           stack: error instanceof Error ? error.stack : undefined,
         });
         const mapped = options.mapRunError?.(error);
-        if (mapped) return errorResponse(mapped.message, mapped.status);
+        if (mapped) return errorResponse(mapped.message, mapped.status, mapped.details);
         return errorResponse(`${options.errorLabel}暂时无法生成回复，请稍后重试。`, 502);
       }
 

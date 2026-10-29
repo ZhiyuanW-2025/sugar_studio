@@ -1,17 +1,15 @@
 import { createAgentMessageHandlers } from "../../../../../lib/agents/message-route";
 import { procurementAgentInstructions, runProcurementAgent } from "../../../../../lib/agents/procurement-agent";
-import { NewtonApiError } from "../../../../../lib/newton/server";
+import { findNewtonApiError, newtonErrorPublicDetails } from "../../../../../lib/newton/server";
 
 export const dynamic = "force-dynamic";
 
-function findNewtonError(error: unknown): NewtonApiError | undefined {
-  let current = error;
-  for (let depth = 0; depth < 4; depth += 1) {
-    if (current instanceof NewtonApiError) return current;
-    if (!current || typeof current !== "object") return undefined;
-    current = (current as { cause?: unknown }).cause;
-  }
-  return undefined;
+function formatNewtonErrorMessage(message: string, code: string | null, traceId: string | null) {
+  const references = [
+    code ? `错误码：${code}` : null,
+    traceId ? `1688 Trace ID：${traceId}` : null,
+  ].filter((item): item is string => Boolean(item));
+  return references.length > 0 ? `${message}（${references.join("；")}）` : message;
 }
 
 const handlers = createAgentMessageHandlers({
@@ -20,12 +18,16 @@ const handlers = createAgentMessageHandlers({
   fallbackInstructions: procurementAgentInstructions,
   run: runProcurementAgent,
   mapRunError(error) {
-    const newtonError = findNewtonError(error);
+    const newtonError = findNewtonApiError(error);
     if (!newtonError) return undefined;
-    if (newtonError.code === "NEWTON_NOT_CONFIGURED") return { message: newtonError.message, status: 503 };
-    if (newtonError.code === "NEWTON_WAIT_USER" || newtonError.code === "INVALID_REQUIREMENT") return { message: newtonError.message, status: 422 };
-    if (newtonError.code?.startsWith("RATE_LIMIT_") || newtonError.retryable) return { message: newtonError.message, status: 503 };
-    return { message: newtonError.message, status: 502 };
+    const diagnostics = newtonErrorPublicDetails(newtonError);
+    console.error("[procurement] 1688 request failed", diagnostics);
+    const message = formatNewtonErrorMessage(newtonError.message, newtonError.code, newtonError.traceId);
+    const details = { integrationError: diagnostics };
+    if (newtonError.code === "NEWTON_NOT_CONFIGURED") return { message, status: 503, details };
+    if (newtonError.code === "NEWTON_WAIT_USER" || newtonError.code === "INVALID_REQUIREMENT") return { message, status: 422, details };
+    if (newtonError.code?.startsWith("RATE_LIMIT_") || newtonError.retryable) return { message, status: 503, details };
+    return { message, status: 502, details };
   },
 });
 

@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
 // @ts-expect-error -- Node 22 strip-types test entrypoint needs an explicit extension.
-import { NewtonApiError, NewtonClient, normalizeInquiryResult } from "../lib/newton/client.ts";
+import {
+  findNewtonApiError,
+  NewtonApiError,
+  NewtonClient,
+  newtonErrorPublicDetails,
+  normalizeInquiryResult,
+} from "../lib/newton/client.ts";
 
 const credentials = { appKey: "test-key", appSecret: "test-secret", accessToken: "test-token" };
 
@@ -77,6 +83,54 @@ test("fetches a referenced complex_table and handles transient rate limiting", a
   const result = await client.searchProducts("找礼品袋");
   assert.equal(getAttempts, 2);
   assert.equal(result.products[0].item_id, "456");
+});
+
+test("preserves safe 1688 diagnostics and redacts credentials from provider messages", async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const client = new NewtonClient({
+      ...credentials,
+      fetchImpl: async () => Response.json({
+        success: false,
+        errorCode: "WORKFLOW_DENIED",
+        errorMessage: `workflow disabled for ${credentials.accessToken}`,
+        eagleTraceId: "trace-1688-1",
+      }, { status: 403 }),
+    });
+    await assert.rejects(() => client.createProcurementTask("找礼品袋"), (error: unknown) => {
+      assert.ok(error instanceof NewtonApiError);
+      assert.equal(error.code, "WORKFLOW_DENIED");
+      assert.equal(error.status, 403);
+      assert.equal(error.traceId, "trace-1688-1");
+      assert.equal(error.apiName, "newtoncloud.task.create");
+      assert.equal(error.providerMessage, "workflow disabled for [REDACTED]");
+      assert.equal(error.message.includes(credentials.accessToken), false);
+      return true;
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
+test("unwraps Newton errors from the Agent SDK error property", () => {
+  const inner = new NewtonApiError("1688 找品服务请求失败。", {
+    code: "WORKFLOW_DENIED",
+    status: 403,
+    traceId: "trace-1688-2",
+    apiName: "newtoncloud.task.create",
+  });
+  const wrapped = { name: "ToolCallError", error: inner };
+  assert.equal(findNewtonApiError(wrapped), inner);
+  assert.deepEqual(newtonErrorPublicDetails(inner), {
+    upstream: "1688",
+    apiName: "newtoncloud.task.create",
+    errorCode: "WORKFLOW_DENIED",
+    upstreamStatus: 403,
+    traceId: "trace-1688-2",
+    retryable: false,
+    providerMessage: null,
+  });
 });
 
 test("stops safely when Newton requests user interaction", async () => {

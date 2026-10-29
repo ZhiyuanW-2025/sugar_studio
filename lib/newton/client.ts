@@ -113,15 +113,52 @@ export class NewtonApiError extends Error {
   status: number | null;
   traceId: string | null;
   retryable: boolean;
+  apiName: string | null;
+  providerMessage: string | null;
 
-  constructor(message: string, options: { code?: string | null; status?: number | null; traceId?: string | null; retryable?: boolean } = {}) {
+  constructor(message: string, options: {
+    code?: string | null;
+    status?: number | null;
+    traceId?: string | null;
+    retryable?: boolean;
+    apiName?: string | null;
+    providerMessage?: string | null;
+  } = {}) {
     super(message);
     this.name = "NewtonApiError";
     this.code = options.code ?? null;
     this.status = options.status ?? null;
     this.traceId = options.traceId ?? null;
     this.retryable = options.retryable ?? false;
+    this.apiName = options.apiName ?? null;
+    this.providerMessage = options.providerMessage ?? null;
   }
+}
+
+export function findNewtonApiError(error: unknown): NewtonApiError | undefined {
+  const queue: unknown[] = [error];
+  const visited = new Set<object>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current instanceof NewtonApiError) return current;
+    if (!current || typeof current !== "object" || visited.has(current)) continue;
+    visited.add(current);
+    const wrapped = current as { error?: unknown; cause?: unknown; originalError?: unknown };
+    queue.push(wrapped.error, wrapped.cause, wrapped.originalError);
+  }
+  return undefined;
+}
+
+export function newtonErrorPublicDetails(error: NewtonApiError) {
+  return {
+    upstream: "1688",
+    apiName: error.apiName,
+    errorCode: error.code,
+    upstreamStatus: error.status,
+    traceId: error.traceId,
+    retryable: error.retryable,
+    providerMessage: error.providerMessage,
+  };
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -158,6 +195,12 @@ function textValue(value: unknown): string | null {
   if (typeof value === "string") return value.trim() || null;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return null;
+}
+
+function sanitizeProviderMessage(value: unknown, secrets: string[]): string | null {
+  const text = textValue(value)?.replace(/\s+/g, " ").slice(0, 500) ?? null;
+  if (!text) return null;
+  return secrets.filter(Boolean).reduce((current, secret) => current.replaceAll(secret, "[REDACTED]"), text);
 }
 
 function numberValue(value: unknown): number | null {
@@ -428,17 +471,53 @@ export class NewtonClient {
         const nestedResult = asObject(payload?.result);
         const code = textValue(payload?.errorCode ?? payload?.code ?? nestedResult?.errorCode ?? nestedResult?.error);
         const traceId = textValue(payload?.eagleTraceId ?? payload?.traceId ?? nestedResult?.eagleTraceId);
+        const providerMessage = sanitizeProviderMessage(
+          payload?.errorMessage
+            ?? payload?.errorMsg
+            ?? payload?.message
+            ?? nestedResult?.errorMessage
+            ?? nestedResult?.errorMsg
+            ?? nestedResult?.message,
+          [this.appKey, this.appSecret, this.accessToken],
+        );
         const rateLimited = response.status === 429 || Boolean(code?.startsWith("RATE_LIMIT_"));
         if (!response.ok || payload?.success === false || nestedResult?.success === false || code) {
-          const message = rateLimited ? "1688 找品服务当前繁忙，请稍后重试。" : "1688 找品服务请求失败。";
-          throw new NewtonApiError(message, { code, status: response.status, traceId, retryable: rateLimited || response.status >= 500 });
+          const message = rateLimited
+            ? "1688 找品服务当前繁忙，请稍后重试。"
+            : providerMessage
+              ? `1688 找品服务请求失败：${providerMessage}`
+              : "1688 找品服务请求失败。";
+          throw new NewtonApiError(message, {
+            code,
+            status: response.status,
+            traceId,
+            retryable: rateLimited || response.status >= 500,
+            apiName,
+            providerMessage,
+          });
         }
         return payload ?? {};
       } catch (error) {
         const converted = error instanceof NewtonApiError
           ? error
-          : new NewtonApiError(error instanceof Error && error.name === "AbortError" ? "1688 找品服务请求超时。" : "暂时无法连接 1688 找品服务。", { code: "NEWTON_NETWORK_ERROR", retryable: true });
+          : new NewtonApiError(error instanceof Error && error.name === "AbortError" ? "1688 找品服务请求超时。" : "暂时无法连接 1688 找品服务。", {
+            code: "NEWTON_NETWORK_ERROR",
+            retryable: true,
+            apiName,
+          });
+        converted.apiName ??= apiName;
         lastError = converted;
+        console.error("[newton] request failed", {
+          apiName: converted.apiName,
+          errorCode: converted.code,
+          upstreamStatus: converted.status,
+          traceId: converted.traceId,
+          retryable: converted.retryable,
+          providerMessage: converted.providerMessage,
+          taskId: textValue(businessParams.taskId),
+          attempt: attempt + 1,
+          attempts,
+        });
         if (!retrySafe || !converted.retryable || attempt === attempts - 1) throw converted;
         await this.sleep(500 * 2 ** attempt);
       } finally {
